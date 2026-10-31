@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Cosine.Api/Cosine.Api.csproj" />
+    <Project Path="src/Cosine.Audio/Cosine.Audio.csproj" />
+    <Project Path="src/Cosine.Core/Cosine.Core.csproj" />
+    <Project Path="src/Cosine.Infrastructure/Cosine.Infrastructure.csproj" />
+    <Project Path="src/Cosine.Playback.Abstractions/Cosine.Playback.Abstractions.csproj" />
+    <Project Path="src/Cosine.Playback.Upnp/Cosine.Playback.Upnp.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Cosine.Tests/Cosine.Tests.csproj" />
+    <Project Path="tests/Cosine.Playback.Loopback/Cosine.Playback.Loopback.csproj" />
+  </Folder>
+</Solution>

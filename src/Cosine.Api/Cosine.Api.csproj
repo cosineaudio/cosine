@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowMissingPrunePackageData>true</AllowMissingPrunePackageData>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.10" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.10" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="10.0.10" />
+    <PackageReference Include="Microsoft.OpenApi" Version="2.11.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.10">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="OpenTelemetry.Exporter.Prometheus.AspNetCore" Version="1.17.0-beta.1" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.17.0" />
+    <PackageReference Include="Quartz.Serialization.Json" Version="3.18.2" />
+    <PackageReference Include="Riok.Mapperly" Version="4.3.1" />
+    <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Cosine.Infrastructure\Cosine.Infrastructure.csproj" />
+    <!-- Referenced only to register the drivers in DI. Nothing else in the codebase
+         knows these projects exist. -->
+    <ProjectReference Include="..\Cosine.Playback.Upnp\Cosine.Playback.Upnp.csproj" />
+  </ItemGroup>
+
+  <Target Name="BuildFrontend" AfterTargets="Build" Condition="Exists('..\Cosine.Web\package.json') And '$(SkipFrontendBuild)' != 'true'">
+    <Exec Command="npm run build" WorkingDirectory="..\Cosine.Web" />
+    <ItemGroup>
+      <FrontendFiles Include="..\Cosine.Web\dist\**\*.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(FrontendFiles)" DestinationFolder="wwwroot\%(RecursiveDir)" />
+  </Target>
+
+</Project>

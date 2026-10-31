@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Zero references, by design. This project
+    takes PCM samples in and returns numbers out. It knows nothing about ffmpeg, files,
+    EF Core or pgvector - that boundary is what lets the whole test suite drive it with
+    synthetic signals whose correct answers are known analytically, rather than with audio
+    fixtures whose correct answers are whatever the code happened to produce.
+    Nothing may be added here.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

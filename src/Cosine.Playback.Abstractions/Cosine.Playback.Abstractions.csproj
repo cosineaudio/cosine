@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Zero references, by design (plan §4.6). Cosine.Core package-references Npgsql and
+    Pgvector; a driver that packetises RTP must not transitively drag in a Postgres
+    driver and a vector-search library. Nothing may be added here.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

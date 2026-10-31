@@ -1,0 +1,8 @@
+NOTIFY * HTTP/1.1
+HOST: 239.255.255.250:1900
+CACHE-CONTROL: max-age=1800
+LOCATION: http://192.168.1.42:49152/upnp/desc/uuid-2867d02c-8e2e-4b6a-9f76-6f7a1a3a5f01/description.xml
+NT: urn:schemas-upnp-org:device:MediaRenderer:1
+NTS: ssdp:alive
+SERVER: Linux/5.10.92-v8+ UPnP/1.0 upmpdcli/1.5.13
+USN: uuid:2867d02c-8e2e-4b6a-9f76-6f7a1a3a5f01::urn:schemas-upnp-org:device:MediaRenderer:1

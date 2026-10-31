@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- An action with no out-arguments. The response element is present but empty. -->
+<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
+   <s:Body>
+
+      <u:PlayResponse xmlns:u="urn:schemas-upnp-org:service:AVTransport:1" />
+
+   </s:Body>
+</s:Envelope>

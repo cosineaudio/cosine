@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <specVersion>
+    <major>1</major>
+    <minor>0</minor>
+  </specVersion>
+  <device>
+    <deviceType>urn:schemas-upnp-org:device:MediaRenderer:1</deviceType>
+    <friendlyName>Volumio</friendlyName>
+    <manufacturer>Volumio</manufacturer>
+    <manufacturerURL>https://volumio.com</manufacturerURL>
+    <modelDescription>UPnP/AV 1.0 Compliant Media Renderer</modelDescription>
+    <modelName>UpMpd</modelName>
+    <modelNumber>1.5.20</modelNumber>
+    <modelURL>https://www.lesbonscomptes.com/upmpdcli</modelURL>
+    <serialNumber>0000001</serialNumber>
+    <UDN>uuid:c6a4a1f0-9b0a-4d6b-9c1f-0f9d3e1a7c21</UDN>
+    <iconList>
+      <icon>
+        <mimetype>image/png</mimetype>
+        <width>64</width>
+        <height>64</height>
+        <depth>32</depth>
+        <url>/upmpd/icon.png</url>
+      </icon>
+    </iconList>
+    <serviceList>
+      <service>
+        <serviceType>urn:schemas-upnp-org:service:AVTransport:1</serviceType>
+        <serviceId>urn:upnp-org:serviceId:AVTransport</serviceId>
+        <SCPDURL>AVTransport.xml</SCPDURL>
+        <controlURL>ctl/AVTransport</controlURL>
+        <eventSubURL>evt/AVTransport</eventSubURL>
+      </service>
+      <service>
+        <serviceType>urn:schemas-upnp-org:service:RenderingControl:1</serviceType>
+        <serviceId>urn:upnp-org:serviceId:RenderingControl</serviceId>
+        <SCPDURL>/RenderingControl.xml</SCPDURL>
+        <controlURL>/ctl/RenderingControl</controlURL>
+        <eventSubURL>/evt/RenderingControl</eventSubURL>
+      </service>
+      <service>
+        <serviceType>urn:schemas-upnp-org:service:ConnectionManager:1</serviceType>
+        <serviceId>urn:upnp-org:serviceId:ConnectionManager</serviceId>
+        <SCPDURL>ConnectionManager.xml</SCPDURL>
+        <controlURL>ctl/ConnectionManager</controlURL>
+        <eventSubURL>evt/ConnectionManager</eventSubURL>
+      </service>
+    </serviceList>
+  </device>
+</root>

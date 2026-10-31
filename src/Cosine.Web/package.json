@@ -1,0 +1,42 @@
+{
+  "name": "cosine-web",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc -b && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@fontsource-variable/inter": "^5.3.0",
+    "@fontsource-variable/jetbrains-mono": "^5.3.0",
+    "@microsoft/signalr": "^10.0.0",
+    "@tailwindcss/vite": "^4.3.3",
+    "@tanstack/vue-virtual": "^3.13.32",
+    "@vueuse/core": "^14.3.0",
+    "lucide-vue-next": "^1.0.0",
+    "node-vibrant": "^4.0.4",
+    "pinia": "^4.0.2",
+    "reka-ui": "^2.10.1",
+    "tailwindcss": "^4.3.3",
+    "vue": "^3.5.39",
+    "vue-router": "^5.2.0",
+    "vue-sonner": "^2.0.9"
+  },
+  "devDependencies": {
+    "@csstools/postcss-cascade-layers": "^6.0.0",
+    "@types/node": "^24.13.2",
+    "@vitejs/plugin-vue": "^6.0.7",
+    "@vue/test-utils": "^2.4.11",
+    "@vue/tsconfig": "^0.9.1",
+    "happy-dom": "^20.11.0",
+    "typescript": "~6.0.2",
+    "vite": "^8.1.1",
+    "vitest": "^4.1.10",
+    "vue-tsc": "^3.3.5"
+  }
+}

@@ -1,0 +1,318 @@
+@import "tailwindcss";
+
+/* Self-hosted fonts - nothing loads from an external CDN at runtime. */
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/jetbrains-mono";
+@import "./assets/fonts/outfit.css";
+
+/*
+ * LIBERTAE design tokens - the single source of truth.
+ * Change the accent / radius / typeface here and it propagates app-wide.
+ */
+@theme {
+  /* Color - stark mono + white. The only color in the app comes from cover art. */
+  --color-bg: #0a0a0a;          /* canvas (near-black, warm) */
+  --color-surface: #141414;     /* cards, sidebar, bars */
+  --color-surface-2: #1e1e1e;   /* hover / raised / inputs */
+  --color-border: #262626;      /* hairlines (1px) */
+  --color-text: #f5f5f3;        /* primary (off-white) */
+  --color-muted: #8a8a85;       /* secondary */
+  --color-faint: #565651;       /* tertiary / disabled */
+
+  --color-accent: #ffffff;      /* white IS the accent */
+  --color-accent-ink: #0a0a0a;  /* text on white fills */
+  --color-danger: #ff3b30;      /* destructive only */
+
+  /* Typography - display / body / mono */
+  --font-display: 'Outfit', 'Inter Variable', system-ui, sans-serif;
+  --font-sans: 'Inter Variable', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* Fluid display scale */
+  --text-display-xl: clamp(2.5rem, 1.5rem + 5vw, 5rem);
+  --text-display-xl--line-height: 0.95;
+  --text-display-l: clamp(1.75rem, 1.2rem + 2.5vw, 2.75rem);
+  --text-display-l--line-height: 1.02;
+  --text-title: clamp(1.25rem, 1rem + 1vw, 1.75rem);
+  --text-title--line-height: 1.1;
+
+  /* Shape - hybrid: 4px on controls, 0px on large art */
+  --radius-control: 4px;
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@layer base {
+  html {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border) transparent;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background-color: var(--color-accent);
+    color: var(--color-accent-ink);
+  }
+
+  /* Custom scrollbars - thin, monochrome. The transparent border plus content-box clip leaves a
+     hairline thumb inside a wider, easier-to-grab hit area. */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-border);
+    border-radius: 999px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-faint);
+    background-clip: content-box;
+  }
+
+  /* Tabular figures everywhere mono is used, so number columns don't jitter */
+  .font-mono {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Always-visible focus ring, keyboard-driven */
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  /* Uppercase, tight-tracked label - the LIBERTAE voice */
+  .label {
+    font-size: 0.6875rem;
+    line-height: 1;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--color-muted);
+    font-weight: 500;
+  }
+
+  /*
+   * Loading skeleton - a slow shimmer sweep across a surface tile.
+   *
+   * The sweep is `linear` on purpose. An easing curve on an infinite animation
+   * front-loads the travel and then crawls, which reads as a stutter rather
+   * than a pass. `--shimmer-delay` lets a grid cascade its tiles (see
+   * SkeletonGrid) instead of pulsing all of them on the same frame.
+   */
+  .skeleton {
+    position: relative;
+    overflow: hidden;
+    background-color: var(--color-surface-2);
+  }
+  .skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      color-mix(in srgb, var(--color-text) 6%, transparent) 50%,
+      transparent 100%
+    );
+    animation: shimmer 1.8s linear infinite;
+    animation-delay: var(--shimmer-delay, 0ms);
+  }
+
+  /* Real content taking a skeleton's place - a fade, never a hard swap. */
+  .reveal {
+    animation: reveal 0.15s var(--ease-out) both;
+  }
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes reveal {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes spin {
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/*
+ * Reduced motion. Skeletons hold still and the reveal collapses to nothing,
+ * but a spinner is deliberately exempt: it is the only signal that an action
+ * is in flight, and a spinner that does not spin says nothing at all. It is
+ * slowed instead - rotation about a centre is not a vestibular trigger the way
+ * the global `translate` transitions this rule exists to suppress are.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton::after {
+    animation: none;
+  }
+  .reveal {
+    animation: none;
+  }
+  .spinner-arc {
+    animation-duration: 1.2s !important;
+    animation-iteration-count: infinite !important;
+  }
+}
+
+/*
+ * Viewport-height shells. `dvh` needs Chromium 108 / Safari 15.4; smart-TV
+ * browsers are older than that and would fall back to `height: auto`, which
+ * collapses the whole app shell. Same block, so the last valid unit wins.
+ */
+@utility h-viewport {
+  height: 100vh;
+  @supports (height: 100dvh) {
+    height: 100dvh;
+  }
+}
+
+@utility min-h-viewport {
+  min-height: 100vh;
+  @supports (height: 100dvh) {
+    min-height: 100dvh;
+  }
+}
+
+/*
+ * Full-screen player art. Sized from its own width - the column it sits in is
+ * centred, not stretched, so it has no definite height for a percentage to
+ * resolve against - but capped by the vertical room the header, title block and
+ * transport leave over, so a short window shrinks the cover instead of pushing
+ * the header off the top. The 4rem floor keeps it from vanishing entirely on a
+ * very short window, and the vh/dvh pair is the same fallback as the shells above.
+ */
+@utility cover-fit {
+  max-width: max(4rem, min(28rem, calc(100vh - 24rem)));
+  @supports (height: 100dvh) {
+    max-width: max(4rem, min(28rem, calc(100dvh - 24rem)));
+  }
+}
+
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/*
+ * Toasts (vue-sonner) - positioning.
+ *
+ * The toaster is fixed to the viewport, but the app shell docks chrome at the
+ * bottom: the now-playing bar (desktop 80px + hairline, mobile mini-bar 63px)
+ * and, below lg, the mobile tab bar. A toast at the default offset lands on
+ * the transport controls. These vars track what is actually docked - the bars
+ * are v-if'd, so presence is detected with :has() - and the Toaster's offset
+ * in App.vue points at the sum. Browsers without :has() fall back to the base
+ * offset, which is just the old overlapping behaviour, not a breakage.
+ *
+ * The heights mirror NowPlayingBar.vue / MobileTabBar.vue markup; the 16px
+ * breathing gap absorbs small drift.
+ */
+:root {
+  --now-playing-bar-h: 0px;
+  --tab-bar-h: 0px;
+  --toast-offset: calc(var(--now-playing-bar-h) + var(--tab-bar-h) + 16px);
+}
+:root:has([data-now-playing-bar]) {
+  --now-playing-bar-h: 81px;
+}
+@media (max-width: 639.98px) {
+  :root:has([data-now-playing-bar]) {
+    --now-playing-bar-h: 63px;
+  }
+}
+@media (max-width: 1023.98px) {
+  :root:has([data-mobile-tab-bar]) {
+    --tab-bar-h: 56px;
+  }
+}
+/* The full-screen player covers the bars, so toasts drop back to the edge.
+   Last on purpose: it must beat every rule above at equal specificity. */
+:root:has([data-fullscreen-player]) {
+  --now-playing-bar-h: 0px;
+  --tab-bar-h: 0px;
+}
+
+/*
+ * Toasts - LIBERTAE dress. Raised surface + hairline instead of the library's
+ * shadow, control radius, Inter, and room to breathe. Selectors repeat
+ * vue-sonner's own ([data-styled], the dark-theme pair) for specificity, with
+ * style.css imported after the library stylesheet so ties resolve to us.
+ */
+[data-sonner-toaster][data-sonner-theme='dark'] {
+  font-family: var(--font-sans);
+  --normal-bg: var(--color-surface-2);
+  --normal-border: var(--color-border);
+  --normal-text: var(--color-text);
+  --border-radius: var(--radius-control);
+}
+[data-sonner-toast][data-styled='true'] {
+  padding: 0.875rem 1rem;
+  gap: 0.625rem;
+  box-shadow: none;
+  font-size: 0.875rem;
+}
+[data-sonner-toast][data-styled='true'] [data-title] {
+  font-weight: 500;
+  line-height: 1.4;
+}
+[data-sonner-toaster][data-sonner-theme='dark'] [data-description] {
+  color: var(--color-muted);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+/* Lucide icons render 24px by default; sonner's icon slot is 16px */
+[data-sonner-toast][data-styled='true'] [data-icon] svg {
+  width: 16px;
+  height: 16px;
+}
+/* White is the signal; color is reserved for errors (danger only). */
+[data-sonner-toast][data-styled='true'] [data-icon] {
+  color: var(--color-accent);
+}
+[data-sonner-toast][data-type='error'][data-styled='true'] [data-icon] {
+  color: var(--color-danger);
+}
+[data-sonner-toast][data-styled='true'] [data-icon] svg.lucide-loader-circle {
+  color: var(--color-muted);
+  animation: spin 1s linear infinite;
+}

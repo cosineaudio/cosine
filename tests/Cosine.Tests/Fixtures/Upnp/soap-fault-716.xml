@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  716: the renderer could not fetch the URI we gave it. Almost always a routing problem - the
+  advertised base URL resolves for the browser and not from the speaker's side of the network.
+-->
+<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/" SOAP-ENV:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
+  <SOAP-ENV:Body>
+    <SOAP-ENV:Fault>
+      <faultcode>SOAP-ENV:Client</faultcode>
+      <faultstring>UPnPError</faultstring>
+      <detail>
+        <u:UPnPError xmlns:u="urn:schemas-upnp-org:control-1-0">
+          <u:errorCode>716</u:errorCode>
+          <u:errorDescription>Resource not found</u:errorDescription>
+        </u:UPnPError>
+      </detail>
+    </SOAP-ENV:Fault>
+  </SOAP-ENV:Body>
+</SOAP-ENV:Envelope>

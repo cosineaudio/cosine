@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- No prefix at all: the SOAP namespace is the default, and the response element carries its own. -->
+<Envelope xmlns="http://schemas.xmlsoap.org/soap/envelope/">
+  <Body>
+    <GetVolumeResponse xmlns="urn:schemas-upnp-org:service:RenderingControl:1">
+      <CurrentVolume>37</CurrentVolume>
+    </GetVolumeResponse>
+  </Body>
+</Envelope>

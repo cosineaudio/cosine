@@ -1,0 +1,56 @@
+name: cosine-dev
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_USER: cosine
+      POSTGRES_PASSWORD: cosine
+      POSTGRES_DB: cosine
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-55432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cosine -d cosine"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-56379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  api:
+    profiles: [app]
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    ports:
+      - "127.0.0.1:${HTTP_PORT:-8080}:8080"
+    environment:
+      PUID: "${PUID:-1000}"
+      PGID: "${PGID:-1000}"
+      ConnectionStrings__cosine: "Host=postgres;Database=cosine;Username=cosine;Password=cosine"
+      ConnectionStrings__redis: "redis:6379"
+      Jwt__SigningKey: "${JWT_SIGNING_KEY:?Set JWT_SIGNING_KEY in .env; generate it with openssl rand -base64 48}"
+      Media__RootPath: /media
+      Transcoding__CachePath: /app/transcode-cache
+    volumes:
+      - ${MEDIA_PATH:-./media}:/media:ro
+      - transcache:/app/transcode-cache
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  transcache:

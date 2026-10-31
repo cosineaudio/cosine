@@ -1,0 +1,21 @@
+<ZoneGroupState>
+  <ZoneGroups>
+    <ZoneGroup Coordinator="RINCON_000E58BBBB01400" ID="RINCON_000E58BBBB01400:0">
+      <ZoneGroupMember
+          UUID="RINCON_000E58BBBB01400"
+          Location="http://192.168.1.56:1400/xml/device_description.xml"
+          ZoneName="Kitchen"
+          Icon="x-rincon-roomicon:kitchen"
+          Configuration="1"
+          SoftwareVersion="83.1-60250"
+          MinCompatibleVersion="82.0-00000"
+          LegacyCompatibleVersion="58.0-00000"
+          BootSeq="17"
+          WifiEnabled="1"
+          Orientation="0"
+          SecureRegState="3"
+          IdleState="1" />
+    </ZoneGroup>
+  </ZoneGroups>
+  <VanishedDevices />
+</ZoneGroupState>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A fault with no UPnPError block. All the diagnosis there is lives in faultstring. -->
+<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
+  <s:Body>
+    <s:Fault>
+      <faultcode>s:Server</faultcode>
+      <faultstring>Internal error processing SetAVTransportURI</faultstring>
+    </s:Fault>
+  </s:Body>
+</s:Envelope>

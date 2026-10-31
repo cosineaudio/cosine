@@ -1,0 +1,39 @@
+# Build output and dependencies
+**/bin/
+**/obj/
+node_modules/
+dist/
+dist-ssr/
+*.tsbuildinfo
+*.user
+*.suo
+src/Cosine.Api/wwwroot/
+
+# Runtime data and local secrets
+media/
+transcode-cache/
+.env
+.env.*
+!.env.example
+appsettings.Local.json
+appsettings.*.local.json
+
+# Editors and local assistant state
+.idea/
+.vscode/
+.claude/
+.crush/
+.agents/
+.codex/
+.aws/
+.DS_Store
+*.swp
+*.swo
+
+# Logs and test output
+*.log
+TestResults/
+coverage/
+playwright-report/
+test-results/
+cookies*.txt

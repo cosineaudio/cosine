@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <!--
+    One project reference, per plan §4.6. SSDP is UdpClient + multicast and SOAP is HttpClient +
+    XDocument, so no protocol library is needed.
+
+    The logging facade is the one package. §4.6's rule is about dependency weight and direction -
+    "a project that packetises RTP must not transitively drag in Postgres drivers and a
+    vector-search library" - and this is a dependency-free façade, not a stack. It earns its place
+    because the alternative fails §1.4 outright: with no ILogger, a driver can only take an
+    Action<string> callback, which is an implicit shape agreement with no levels, no event ids and
+    no structured fields. "Could not join the multicast group" and "sighting parsed" would arrive
+    at the same severity, and "no devices found" is the single most common thing anyone will ever
+    have to debug here.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\Cosine.Playback.Abstractions\Cosine.Playback.Abstractions.csproj" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.10" />
+  </ItemGroup>
+
+</Project>

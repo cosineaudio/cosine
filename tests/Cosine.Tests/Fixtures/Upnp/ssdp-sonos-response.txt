@@ -1,0 +1,12 @@
+HTTP/1.1 200 OK
+CACHE-CONTROL: max-age = 1800
+EXT:
+LOCATION: http://192.168.1.61:1400/xml/device_description.xml
+SERVER: Linux UPnP/1.0 Sonos/81.1-52130 (ZPS12)
+ST: urn:schemas-upnp-org:device:ZonePlayer:1
+USN: uuid:RINCON_949F3EC1B3E401400::urn:schemas-upnp-org:device:ZonePlayer:1
+X-RINCON-HOUSEHOLD: Sonos_ABCdefGHIjklMNOpqrSTuvwXY
+X-RINCON-BOOTSEQ: 63
+X-RINCON-WIFIMODE: 0
+X-RINCON-VARIANT: 0
+HOUSEHOLD.SMARTSPEAKER.AUDIO: Sonos_ABCdefGHIjklMNOpqrSTuvwXY.mHDVJBk1lC6NQpDLwSSA

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  A renderer mid-transcode: it has no idea how long the stream is and does not implement RelTime,
+  but it does keep an absolute clock. TrackDuration 0:00:00 here is the dishonest "unknown".
+-->
+<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/" SOAP-ENV:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
+  <SOAP-ENV:Body>
+    <m:GetPositionInfoResponse xmlns:m="urn:schemas-upnp-org:service:AVTransport:1">
+      <Track>0</Track>
+      <TrackDuration>0:00:00</TrackDuration>
+      <TrackMetaData>NOT_IMPLEMENTED</TrackMetaData>
+      <TrackURI>http://192.168.1.10:5000/playback/stream/live</TrackURI>
+      <RelTime>NOT_IMPLEMENTED</RelTime>
+      <AbsTime>0:00:41.500</AbsTime>
+      <RelCount>2147483647</RelCount>
+      <AbsCount>2147483647</AbsCount>
+    </m:GetPositionInfoResponse>
+  </SOAP-ENV:Body>
+</SOAP-ENV:Envelope>

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>cosine</title>
+    <!--
+      Pre-hydration shell. Nothing renders in #app until the main chunk has been
+      fetched and parsed, so this is inlined here rather than imported: it has to
+      paint before any of the app's own CSS or JS exists.
+
+      The background colour is duplicated from --color-bg so a cold load opens on
+      the app's canvas instead of a white flash, and the wordmark is delayed 400ms
+      so a warm load never shows it at all - it only appears when the boot is
+      genuinely slow enough to look broken without it. Vue clears the container on
+      mount, so nothing here needs tearing down.
+    -->
+    <style>
+      body {
+        margin: 0;
+        background-color: #0a0a0a;
+      }
+      #boot-shell {
+        display: grid;
+        place-items: center;
+        height: 100vh;
+        font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        font-size: 1.5rem;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        text-transform: lowercase;
+        color: #565651;
+        opacity: 0;
+        animation: boot-shell-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) 0.4s forwards;
+      }
+      @keyframes boot-shell-in {
+        to {
+          opacity: 1;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #boot-shell {
+          animation-duration: 0.01ms;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"><div id="boot-shell">cosine</div></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

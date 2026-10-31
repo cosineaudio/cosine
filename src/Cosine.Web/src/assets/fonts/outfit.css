@@ -1,0 +1,9 @@
+/* Outfit, SIL OFL 1.1. See public/licenses/outfit-OFL-1.1.txt.
+ * Unmodified Latin variable font distributed by @fontsource-variable/outfit. */
+@font-face {
+  font-family: 'Outfit';
+  src: url('./outfit-latin-variable.woff2') format('woff2');
+  font-weight: 100 900;
+  font-display: swap;
+  font-style: normal;
+}

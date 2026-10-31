@@ -1,0 +1,53 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="10.0.1">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.10" />
+    <!-- The playback acceptance test asserts on what actually arrives over the hub, which needs
+         a real client rather than a recording IHubContext. -->
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.10" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.10" />
+    <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="10.0.10" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.8.1" />
+    <PackageReference Include="Testcontainers.PostgreSql" Version="4.6.0" />
+    <PackageReference Include="Testcontainers.Redis" Version="4.6.0" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Fixtures\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Cosine.Audio\Cosine.Audio.csproj" />
+    <ProjectReference Include="..\..\src\Cosine.Core\Cosine.Core.csproj" />
+    <ProjectReference Include="..\..\src\Cosine.Infrastructure\Cosine.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Cosine.Api\Cosine.Api.csproj" />
+    <!-- The Loopback driver is a test double, so this is the only project allowed to
+         reference it. -->
+    <ProjectReference Include="..\Cosine.Playback.Loopback\Cosine.Playback.Loopback.csproj" />
+    <!-- Reached transitively through Cosine.Api, but named here because the unit tests exercise
+         its parsers and builders directly rather than through the application. The
+         drivers are tested from this project rather than from one test project each. -->
+    <ProjectReference Include="..\..\src\Cosine.Playback.Upnp\Cosine.Playback.Upnp.csproj" />
+  </ItemGroup>
+
+</Project>

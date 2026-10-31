@@ -1,0 +1,45 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowMissingPrunePackageData>true</AllowMissingPrunePackageData>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- AudioAnalysisProgressReporter is an implementation detail of the analysis sweep and has
+         no business on the public surface, but its throttling is lock-free and the failure mode
+         if it is wrong - every worker thread emitting at once - is exactly what it exists to
+         prevent. Testing it through the public API would mean running a real analysis pass. -->
+    <InternalsVisibleTo Include="Cosine.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Konscious.Security.Cryptography.Argon2" Version="1.3.1" />
+    <PackageReference Include="Microsoft.AspNetCore.DataProtection.EntityFrameworkCore" Version="10.0.10" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.10">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="10.0.10" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <PackageReference Include="Pgvector.EntityFrameworkCore" Version="0.3.0" />
+    <PackageReference Include="Quartz.Extensions.Hosting" Version="3.18.2" />
+    <PackageReference Include="SkiaSharp" Version="4.150.1" />
+    <PackageReference Include="z440.atl.core" Version="7.15.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Cosine.Audio\Cosine.Audio.csproj" />
+    <ProjectReference Include="..\Cosine.Core\Cosine.Core.csproj" />
+    <!-- The engine lives here; the drivers live outside. Infrastructure knows the
+         contract and never a concrete driver (plan §4.6). -->
+    <ProjectReference Include="..\Cosine.Playback.Abstractions\Cosine.Playback.Abstractions.csproj" />
+  </ItemGroup>
+
+</Project>

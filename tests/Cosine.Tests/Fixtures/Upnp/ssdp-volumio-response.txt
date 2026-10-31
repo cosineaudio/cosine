@@ -1,0 +1,10 @@
+HTTP/1.1 200 OK
+CACHE-CONTROL: max-age=1800
+DATE: Sat, 01 Aug 2026 05:46:21 GMT
+EXT:
+LOCATION: http://192.168.1.42:49152/upnp/desc/uuid-2867d02c-8e2e-4b6a-9f76-6f7a1a3a5f01/description.xml
+OPT: "http://schemas.upnp.org/upnp/1/0/"; ns=01
+01-NLS: 4a1f0a3e-9b1c-4f8a-8c2d-1e5b7a9c3d40
+SERVER: Linux/5.10.92-v8+ UPnP/1.0 upmpdcli/1.5.13
+ST: urn:schemas-upnp-org:device:MediaRenderer:1
+USN: uuid:2867d02c-8e2e-4b6a-9f76-6f7a1a3a5f01::urn:schemas-upnp-org:device:MediaRenderer:1

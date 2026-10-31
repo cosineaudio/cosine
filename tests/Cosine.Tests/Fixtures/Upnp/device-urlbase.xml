@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root xmlns="urn:schemas-upnp-org:device-1-0">
+  <specVersion>
+    <major>1</major>
+    <minor>0</minor>
+  </specVersion>
+  <URLBase>http://192.168.1.90:49494/upnp</URLBase>
+  <device>
+    <deviceType>urn:schemas-upnp-org:device:MediaRenderer:1</deviceType>
+    <friendlyName>Living Room TV</friendlyName>
+    <manufacturer>Samsung Electronics</manufacturer>
+    <manufacturerURL>http://www.samsung.com</manufacturerURL>
+    <modelDescription>Samsung TV DMR</modelDescription>
+    <modelName>UE55NU8000</modelName>
+    <modelNumber>AllShare1.0</modelNumber>
+    <serialNumber>20180901</serialNumber>
+    <UDN>uuid:0d1b2c3d-4e5f-6071-8293-a4b5c6d7e8f9</UDN>
+    <serviceList>
+      <service>
+        <serviceType>urn:schemas-upnp-org:service:AVTransport:2</serviceType>
+        <serviceId>urn:upnp-org:serviceId:AVTransport</serviceId>
+        <SCPDURL>AVTransport/scpd.xml</SCPDURL>
+        <controlURL>AVTransport/control</controlURL>
+        <eventSubURL>AVTransport/event</eventSubURL>
+      </service>
+      <service>
+        <serviceType>urn:schemas-upnp-org:service:RenderingControl:2</serviceType>
+        <serviceId>urn:upnp-org:serviceId:RenderingControl</serviceId>
+        <SCPDURL>/rc/scpd.xml</SCPDURL>
+        <controlURL>/rc/control</controlURL>
+        <eventSubURL>/rc/event</eventSubURL>
+      </service>
+      <service>
+        <serviceType>urn:schemas-upnp-org:service:ConnectionManager:2</serviceType>
+        <serviceId>urn:upnp-org:serviceId:ConnectionManager</serviceId>
+        <SCPDURL>http://192.168.1.90:49494/upnp/cm/scpd.xml</SCPDURL>
+        <controlURL>http://192.168.1.90:49494/upnp/cm/control</controlURL>
+        <eventSubURL>http://192.168.1.90:49494/upnp/cm/event</eventSubURL>
+      </service>
+    </serviceList>
+  </device>
+</root>
