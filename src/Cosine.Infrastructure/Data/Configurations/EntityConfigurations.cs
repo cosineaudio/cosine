@@ -11,7 +11,7 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.HasKey(u => u.Id);
         builder.Property(u => u.Username).IsRequired().HasMaxLength(256);
         builder.HasIndex(u => u.Username).IsUnique();
-        builder.Property(u => u.PasswordHash).IsRequired();
+        builder.Property(u => u.PasswordHash).IsRequired(false);
         builder.Property(u => u.SubsonicSecret).IsRequired();
         builder.Property(u => u.Email).HasMaxLength(256);
         builder.Property(u => u.IsAdmin).HasDefaultValue(false);
@@ -442,5 +442,17 @@ public class ListenPartyMemberConfiguration : IEntityTypeConfiguration<ListenPar
         // A member may be a logged-in user, but only for display - no FK constraint games on
         // deletion beyond clearing the reference.
         builder.HasOne<User>().WithMany().HasForeignKey(m => m.UserId).OnDelete(DeleteBehavior.SetNull);
+    }
+}
+
+public class ExternalIdentityConfiguration : IEntityTypeConfiguration<ExternalIdentity>
+{
+    public void Configure(EntityTypeBuilder<ExternalIdentity> builder)
+    {
+        builder.HasKey(x => x.Id);
+        builder.Property(x => x.Issuer).IsRequired().HasMaxLength(512);
+        builder.Property(x => x.Subject).IsRequired().HasMaxLength(255);
+        builder.HasIndex(x => new { x.Issuer, x.Subject }).IsUnique();
+        builder.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
     }
 }

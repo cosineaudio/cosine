@@ -28,6 +28,9 @@ public class UserManagementController : User_ManagementControllerBase
         if (user.Id != currentUserId && !IsAdmin())
             throw new SubsonicException(SubsonicErrorCode._50, "Not authorized");
 
+        if (user.PasswordHash is null)
+            throw new SubsonicException(SubsonicErrorCode._50, "Manage this account's password at the identity provider");
+
         var plainPassword = password.StartsWith("enc:")
             ? System.Text.Encoding.UTF8.GetString(Convert.FromHexString(password[4..]))
             : password;
@@ -225,6 +228,9 @@ public class UserManagementController : User_ManagementControllerBase
         var user = await _userService.GetUserByUsernameAsync(username, cancellationToken);
         if (user is null)
             throw new SubsonicException(SubsonicErrorCode._70, "User not found");
+
+        if (user.PasswordHash is null && !string.IsNullOrEmpty(password))
+            throw new SubsonicException(SubsonicErrorCode._50, "Manage this account's password at the identity provider");
 
         try
         {

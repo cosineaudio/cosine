@@ -1,4 +1,7 @@
 using System.Security.Cryptography;
+using System.Net;
+using Microsoft.AspNetCore.HttpOverrides;
+using Cosine.Api.Authentication;
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -43,15 +46,28 @@ builder.Host.UseSerilog();
 // Store the Data Protection key ring in Postgres (the persistent store we already run)
 // rather than the container's ephemeral $HOME. Without this ASP.NET warns on every boot
 // that the keys won't survive container recreate. cosine's auth is a JWT signed with
-// Jwt:SigningKey - not Data Protection - so this is really about silencing that warning
-// and keeping any DP-protected payloads stable, with no key volume to manage.
+// Jwt:SigningKey, while OIDC state and correlation rely on Data Protection. Persisting
+// this key ring also keeps in-flight logins valid across container recreation.
 builder.Services.AddDataProtection()
     .PersistKeysToDbContext<CosineDbContext>()
     .SetApplicationName("cosine");
 
 // Configuration
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.Section));
-builder.Services.Configure<AuthOptions>(builder.Configuration.GetSection(AuthOptions.Section));
+builder.Services.AddSingleton<IValidateOptions<AuthOptions>, AuthOptionsValidator>();
+builder.Services.AddOptions<AuthOptions>().Bind(builder.Configuration.GetSection(AuthOptions.Section)).ValidateOnStart();
+var authOptions = builder.Configuration.GetSection(AuthOptions.Section).Get<AuthOptions>() ?? new();
+var authValidation = new AuthOptionsValidator().Validate(null, authOptions);
+if (authValidation.Failed)
+    throw new OptionsValidationException(AuthOptions.Section, typeof(AuthOptions), authValidation.Failures);
+
+// Only explicitly trusted proxies may supply the external scheme, host, or client IP.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost;
+    foreach (var address in builder.Configuration.GetSection("ReverseProxy:KnownProxies").Get<string[]>() ?? [])
+        options.KnownProxies.Add(IPAddress.Parse(address));
+});
 builder.Services.Configure<MediaOptions>(builder.Configuration.GetSection(MediaOptions.Section));
 builder.Services.Configure<TranscodingOptions>(builder.Configuration.GetSection(TranscodingOptions.Section));
 builder.Services.Configure<PlaybackOptions>(builder.Configuration.GetSection(PlaybackOptions.Section));
@@ -117,6 +133,8 @@ builder.Services.AddSingleton<IAuthThrottle>(sp =>
         sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<AuthOptions>>(),
         metrics: sp.GetRequiredService<CosineMetrics>()));
 builder.Services.AddScoped<IUserService, UserService>();
+builder.Services.AddScoped<ExternalIdentityService>();
+builder.Services.AddScoped<SessionIssuer>();
 builder.Services.AddScoped<ISettingsService, SettingsService>();
 builder.Services.AddScoped<IMediaLibraryService, MediaLibraryService>();
 builder.Services.AddScoped<IPlayHistoryService, PlayHistoryService>();
@@ -211,7 +229,7 @@ ValidateSigningKey(jwtOptions.SigningKey);
 
 var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.SigningKey));
 
-builder.Services.AddAuthentication(opts =>
+var authentication = builder.Services.AddAuthentication(opts =>
 {
     opts.DefaultAuthenticateScheme = "MultiAuth";
     opts.DefaultChallengeScheme = "MultiAuth";
@@ -266,6 +284,7 @@ builder.Services.AddAuthentication(opts =>
     };
 })
 .AddScheme<SubsonicAuthOptions, SubsonicAuthHandler>(SubsonicAuthHandler.SchemeName, _ => { });
+authentication.AddCosineOidc(authOptions);
 
 builder.Services.AddAuthorization(opts =>
 {
@@ -435,6 +454,7 @@ using (var scope = app.Services.CreateScope())
 }
 
 // Pipeline
+app.UseForwardedHeaders();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();

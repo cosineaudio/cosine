@@ -4,6 +4,10 @@ public class AuthOptions
 {
     public const string Section = "Auth";
 
+    /// <summary>Enables password login in the web app and legacy Subsonic clients.</summary>
+    public bool LocalLoginEnabled { get; set; } = true;
+    public OidcOptions Oidc { get; set; } = new();
+
     /// <summary>
     /// Whether the auth cookie carries the <c>Secure</c> flag. <c>null</c> (the default) mirrors
     /// the scheme of the request that issued it, so a plain-HTTP LAN deployment still receives a

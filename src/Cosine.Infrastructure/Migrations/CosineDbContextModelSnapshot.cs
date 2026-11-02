@@ -230,6 +230,38 @@ namespace Cosine.Infrastructure.Migrations
                     b.ToTable("Bookmarks");
                 });
 
+            modelBuilder.Entity("Cosine.Core.Entities.ExternalIdentity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Issuer")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("Issuer", "Subject")
+                        .IsUnique();
+
+                    b.ToTable("ExternalIdentities");
+                });
+
             modelBuilder.Entity("Cosine.Core.Entities.Genre", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1158,7 +1190,6 @@ namespace Cosine.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("PasswordHash")
-                        .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<string>("SubsonicSecret")
@@ -1272,6 +1303,17 @@ namespace Cosine.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Track");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Cosine.Core.Entities.ExternalIdentity", b =>
+                {
+                    b.HasOne("Cosine.Core.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.Navigation("User");
                 });

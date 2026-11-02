@@ -31,6 +31,12 @@ public static class JwtRevocation
         if (!SecurityStamp.Matches(user, principal.FindFirstValue(SecurityStamp.ClaimType)))
             return "Credentials changed since this token was issued";
 
+        // Authorization must reflect current local privileges, including demotion.
+        if (principal.Identity is ClaimsIdentity identity)
+        {
+            foreach (var claim in identity.FindAll("IsAdmin").ToList()) identity.RemoveClaim(claim);
+            identity.AddClaim(new Claim("IsAdmin", user.IsAdmin.ToString()));
+        }
         return null;
     }
 }

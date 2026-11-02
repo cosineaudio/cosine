@@ -87,6 +87,20 @@ public class JwtRevocationTests
     }
 
     [Fact]
+    public async Task AdminDemotion_ImmediatelyUpdatesExistingSessionClaims()
+    {
+        using var db = TestDbContextFactory.Create();
+        var users = new UserService(db);
+        await users.CreateUserAsync("owner", "pw", isAdmin: true);
+        var user = await users.CreateUserAsync("admin2", "pw", isAdmin: true);
+        var issued = TokenFor(user);
+        ((ClaimsIdentity)issued.Identity!).AddClaim(new Claim("IsAdmin", "True"));
+        await users.UpdateUserAsync(user.Id, isAdmin: false);
+        Assert.Null(await JwtRevocation.CheckAsync(issued, users));
+        Assert.Equal("False", issued.FindFirstValue("IsAdmin"));
+    }
+
+    [Fact]
     public void Stamp_DoesNotLeakTheSubsonicSecret()
     {
         var user = new User { SubsonicSecret = Guid.NewGuid().ToString("N") };

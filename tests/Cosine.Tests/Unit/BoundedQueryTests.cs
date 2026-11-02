@@ -121,7 +121,7 @@ public class BoundedQueryTests
     {
         var stats = new RecordingStats();
         var controller = new Api.Controllers.AdminController(
-            null!, null!, null!, null!, stats,
+            null!, null!, null!, null!, null!, stats,
             Microsoft.Extensions.Logging.Abstractions.NullLogger<Api.Controllers.AdminController>.Instance);
 
         await controller.GetRecap();
@@ -139,7 +139,7 @@ public class BoundedQueryTests
     {
         var stats = new RecordingStats();
         var controller = new Api.Controllers.AdminController(
-            null!, null!, null!, null!, stats,
+            null!, null!, null!, null!, null!, stats,
             Microsoft.Extensions.Logging.Abstractions.NullLogger<Api.Controllers.AdminController>.Instance);
 
         await controller.GetRecap(days: 0);

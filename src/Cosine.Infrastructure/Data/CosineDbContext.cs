@@ -15,6 +15,8 @@ public class CosineDbContext : DbContext, IDataProtectionKeyContext
 
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 
+    public DbSet<ExternalIdentity> ExternalIdentities => Set<ExternalIdentity>();
+
     public DbSet<User> Users => Set<User>();
     public DbSet<Artist> Artists => Set<Artist>();
     public DbSet<Album> Albums => Set<Album>();

@@ -1,6 +1,7 @@
 using Cosine.Core.Entities;
 using Cosine.Core.Interfaces;
 using Cosine.Infrastructure.Jobs;
+using Cosine.Infrastructure.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Quartz;
@@ -16,6 +17,7 @@ public class AdminController : ControllerBase
     private readonly ISettingsService _settings;
     private readonly IScanService _scan;
     private readonly IUserService _users;
+    private readonly ExternalIdentityService _identities;
     private readonly IStatsService _stats;
     private readonly ILogger<AdminController> _logger;
 
@@ -24,6 +26,7 @@ public class AdminController : ControllerBase
         ISettingsService settings,
         IScanService scan,
         IUserService users,
+        ExternalIdentityService identities,
         IStatsService stats,
         ILogger<AdminController> logger)
     {
@@ -31,6 +34,7 @@ public class AdminController : ControllerBase
         _settings = settings;
         _scan = scan;
         _users = users;
+        _identities = identities;
         _stats = stats;
         _logger = logger;
     }
@@ -211,7 +215,8 @@ public class AdminController : ControllerBase
     public async Task<ActionResult<List<UserDto>>> GetUsers(CancellationToken ct)
     {
         var users = await _users.GetUsersAsync(ct);
-        return Ok(users.Select(MapUser).ToList());
+        var linkedUserIds = await _identities.GetLinkedUserIdsAsync(ct);
+        return Ok(users.Select(user => MapUser(user, linkedUserIds.Contains(user.Id))).ToList());
     }
 
     [HttpPost("users")]
@@ -229,6 +234,9 @@ public class AdminController : ControllerBase
         var user = await _users.GetUserAsync(id, ct);
         if (user is null)
             return NotFound();
+
+        if (user.PasswordHash is null && !string.IsNullOrEmpty(request.Password))
+            return Conflict(new { error = "This account uses single sign-on; manage its password at the identity provider" });
 
         try
         {
@@ -270,13 +278,15 @@ public class AdminController : ControllerBase
         return NoContent();
     }
 
-    private static UserDto MapUser(User user) => new()
+    private static UserDto MapUser(User user, bool hasOidcIdentity = false) => new()
     {
         Id = user.Id,
         Username = user.Username,
         Email = user.Email,
         IsAdmin = user.IsAdmin,
         LastLoginAt = user.LastLoginAt,
+        HasLocalPassword = user.PasswordHash is not null,
+        Source = hasOidcIdentity ? (user.PasswordHash is not null ? "local+oidc" : "oidc") : "local",
         CreatedAt = user.CreatedAt
     };
 }
@@ -298,6 +308,8 @@ public record AudioAnalysisStatusDto(bool Available, int Analyzed, int Total, in
 
 public record UserDto
 {
+    public string Source { get; init; } = "local";
+    public bool HasLocalPassword { get; init; }
     public Guid Id { get; init; }
     public string Username { get; init; } = string.Empty;
     public string? Email { get; init; }

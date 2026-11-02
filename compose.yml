@@ -40,6 +40,15 @@ services:
       ConnectionStrings__cosine: "Host=postgres;Database=cosine;Username=cosine;Password=cosine"
       ConnectionStrings__redis: "redis:6379"
       Jwt__SigningKey: "${JWT_SIGNING_KEY:?Set JWT_SIGNING_KEY in .env; generate it with openssl rand -base64 48}"
+      Auth__LocalLoginEnabled: "${LOCAL_LOGIN_ENABLED:-true}"
+      Auth__Oidc__Enabled: "${OIDC_ENABLED:-false}"
+      Auth__Oidc__DisplayName: "${OIDC_DISPLAY_NAME:-Single sign-on}"
+      Auth__Oidc__Authority: "${OIDC_AUTHORITY:-}"
+      Auth__Oidc__ClientId: "${OIDC_CLIENT_ID:-}"
+      Auth__Oidc__ClientSecret: "${OIDC_CLIENT_SECRET:-}"
+      Auth__Oidc__PublicOrigin: "${OIDC_PUBLIC_ORIGIN:-}"
+      Auth__Oidc__AutoProvisionUsers: "${OIDC_AUTO_PROVISION_USERS:-false}"
+      Auth__Oidc__RequireHttpsMetadata: "${OIDC_REQUIRE_HTTPS_METADATA:-true}"
       Media__RootPath: /media
       Transcoding__CachePath: /app/transcode-cache
     volumes:

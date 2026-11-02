@@ -1,4 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
+using Cosine.Api.Authentication;
+using Cosine.Core.Options;
+using Microsoft.Extensions.Options;
 
 namespace Cosine.Api.Middleware;
 
@@ -22,11 +25,13 @@ namespace Cosine.Api.Middleware;
 public class CsrfProtectionMiddleware
 {
     private readonly RequestDelegate _next;
+    private readonly bool _oidcEnabled;
     private readonly Cosine.Infrastructure.Telemetry.CosineMetrics? _metrics;
 
-    public CsrfProtectionMiddleware(RequestDelegate next, Cosine.Infrastructure.Telemetry.CosineMetrics? metrics = null)
+    public CsrfProtectionMiddleware(RequestDelegate next, Cosine.Infrastructure.Telemetry.CosineMetrics? metrics = null, IOptions<AuthOptions>? auth = null)
     {
         _next = next;
+        _oidcEnabled = auth?.Value.Oidc.Enabled ?? false;
         _metrics = metrics;
     }
 
@@ -41,13 +46,17 @@ public class CsrfProtectionMiddleware
         return _next(context);
     }
 
-    private static bool RequiresProof(HttpRequest request)
+    private bool RequiresProof(HttpRequest request)
     {
         var method = request.Method;
         if (HttpMethods.IsGet(method) || HttpMethods.IsHead(method) || HttpMethods.IsOptions(method))
             return false;
 
         var path = request.Path;
+        // The remote handler validates state, correlation, nonce and tokens. Exempt only
+        // its exact enabled callback, never the surrounding /auth surface.
+        if (_oidcEnabled && path.Equals(new PathString(OidcAuthentication.CallbackPath)))
+            return false;
         return path.StartsWithSegments("/api", StringComparison.OrdinalIgnoreCase)
             || path.StartsWithSegments("/auth", StringComparison.OrdinalIgnoreCase)
             || path.StartsWithSegments("/playback", StringComparison.OrdinalIgnoreCase);

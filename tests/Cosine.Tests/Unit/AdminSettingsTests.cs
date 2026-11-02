@@ -16,7 +16,7 @@ public class AdminSettingsTests
     // Only the settings service and the logger are exercised by UpdateSetting; the scheduler is
     // reached for "scan.schedule" alone, which the rejection paths never get to.
     private static AdminController CreateController(TestServiceProvider sp)
-        => new(null!, sp.Get<SettingsService>(), null!, null!, null!,
+        => new(null!, sp.Get<SettingsService>(), null!, null!, null!, null!,
             NullLogger<AdminController>.Instance)
         {
             // The accepted path writes an audit line naming the acting admin.

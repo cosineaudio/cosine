@@ -170,6 +170,14 @@ multicast access; use the native API for development with speakers and set
 `Playback__AdvertisedBaseUrl` to its reachable LAN URL, such as
 `http://192.168.1.10:5222`.
 
+### Optional single sign-on
+
+Cosine supports one OpenID Connect provider alongside local password login or
+as the only browser sign-in method. See [OIDC setup](docs/oidc.md) for environment
+variables, account linking, recovery, and the separate local Keycloak playground.
+OIDC is disabled by default; new accounts are not automatically provisioned unless
+you enable that setting.
+
 ### Stop and remove
 
 ```bash

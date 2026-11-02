@@ -2,6 +2,8 @@ using System.Security.Cryptography;
 using System.Text;
 using Cosine.Core.Entities;
 using Cosine.Core.Interfaces;
+using Cosine.Core.Options;
+using Microsoft.Extensions.Options;
 using Konscious.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
 
@@ -10,14 +12,19 @@ namespace Cosine.Infrastructure.Services;
 public class UserService : IUserService
 {
     private readonly Data.CosineDbContext _db;
+    private readonly AuthOptions _auth;
 
-    public UserService(Data.CosineDbContext db)
+    public UserService(Data.CosineDbContext db, IOptions<AuthOptions>? auth = null)
     {
         _db = db;
+        _auth = auth?.Value ?? new AuthOptions();
     }
 
     public async Task<User> AuthenticateAsync(string username, string password, CancellationToken ct = default)
     {
+        if (!_auth.LocalLoginEnabled)
+            throw new UnauthorizedAccessException("Password login is disabled");
+
         // Usernames are matched case-insensitively: mobile keyboards routinely
         // auto-capitalize the first letter ("Admin" for "admin").
         var user = await _db.Users.FirstOrDefaultAsync(u => u.Username.ToLower() == username.ToLower(), ct);
@@ -133,7 +140,17 @@ public class UserService : IUserService
         var user = await _db.Users.FindAsync([id], ct);
         if (user is null) throw new InvalidOperationException("User not found");
 
+        if (user.PasswordHash is null)
+            throw new InvalidOperationException("External-only accounts cannot be given a password through a password reset");
         user.PasswordHash = HashPassword(newPassword);
+        RotateCredentials(user);
+        await _db.SaveChangesAsync(ct);
+    }
+
+    public async Task RotateCredentialsAsync(Guid id, CancellationToken ct = default)
+    {
+        var user = await _db.Users.FindAsync([id], ct)
+            ?? throw new InvalidOperationException("User not found");
         RotateCredentials(user);
         await _db.SaveChangesAsync(ct);
     }
@@ -167,8 +184,9 @@ public class UserService : IUserService
         return $"{saltBase64}:{hashBase64}";
     }
 
-    private static bool VerifyPassword(string password, string storedHash)
+    private static bool VerifyPassword(string password, string? storedHash)
     {
+        if (string.IsNullOrEmpty(storedHash)) return false;
         var parts = storedHash.Split(':');
         if (parts.Length != 2) return false;
 
