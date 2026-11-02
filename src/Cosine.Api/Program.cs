@@ -138,6 +138,8 @@ builder.Services.AddScoped<SessionIssuer>();
 builder.Services.AddScoped<ISettingsService, SettingsService>();
 builder.Services.AddScoped<IMediaLibraryService, MediaLibraryService>();
 builder.Services.AddScoped<IPlayHistoryService, PlayHistoryService>();
+builder.Services.AddScoped<ILibraryHealthService, LibraryHealthService>();
+builder.Services.AddScoped<IListeningInsightsService, ListeningInsightsService>();
 builder.Services.AddScoped<IStreamingService, StreamingService>();
 builder.Services.AddSingleton<IScanService, ScanService>();
 builder.Services.AddScoped<ISearchService, SearchService>();

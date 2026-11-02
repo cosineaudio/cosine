@@ -3,14 +3,14 @@ using Cosine.Core.Entities;
 namespace Cosine.Core.Interfaces;
 
 /// <summary>
-/// Admin-facing aggregator over the live metrics counters, persisted snapshot history,
-/// and play-history recap. Scoped; consumed only by the admin API.
+/// Aggregator over the live metrics counters, persisted snapshot history,
+/// and play-history recap. Scoped; shared by admin metrics and personal listening insights.
 /// </summary>
 public interface IStatsService
 {
     Task<LiveMetricsDto> GetLiveMetricsAsync(CancellationToken ct = default);
     Task<IReadOnlyList<StatSnapshot>> GetSnapshotHistoryAsync(int hours = 24, CancellationToken ct = default);
-    Task<RecapDto> GetRecapAsync(Guid? userId = null, DateTimeOffset? since = null, int topN = 10, CancellationToken ct = default);
+    Task<RecapDto> GetRecapAsync(Guid? userId = null, DateTimeOffset? since = null, int topN = 10, CancellationToken ct = default, DateTimeOffset? until = null);
 }
 
 public record LiveMetricsDto(MetricsSnapshot Metrics, long RedisKeyCount, TranscodeActivity Transcoding);

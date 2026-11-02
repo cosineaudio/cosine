@@ -21,27 +21,34 @@ public class StarService : IStarService
     {
         var starredEntries = await _db.Stars
             .Where(s => s.UserId == userId)
+            .OrderByDescending(s => s.CreatedAt)
+            .ThenBy(s => s.ItemId)
             .ToListAsync(ct);
 
-        var trackIds = starredEntries.Where(s => s.ItemType == "track").Select(s => s.ItemId).ToList();
-        var albumIds = starredEntries.Where(s => s.ItemType == "album").Select(s => s.ItemId).ToList();
-        var artistIds = starredEntries.Where(s => s.ItemType == "artist").Select(s => s.ItemId).ToList();
+        var trackIds = starredEntries.Where(s => s.ItemType == "track").Select(s => s.ItemId).Distinct().ToList();
+        var albumIds = starredEntries.Where(s => s.ItemType == "album").Select(s => s.ItemId).Distinct().ToList();
+        var artistIds = starredEntries.Where(s => s.ItemType == "artist").Select(s => s.ItemId).Distinct().ToList();
 
         var artists = await _db.Artists
             .Where(a => artistIds.Contains(a.Id))
-            .ToListAsync(ct);
+            .ToDictionaryAsync(a => a.Id, ct);
 
         var albums = await _db.Albums
             .Include(a => a.Artist)
             .Where(a => albumIds.Contains(a.Id))
-            .ToListAsync(ct);
+            .ToDictionaryAsync(a => a.Id, ct);
 
         var tracks = await _db.Tracks
             .WithSongMetadata()
             .Where(t => trackIds.Contains(t.Id))
-            .ToListAsync(ct);
+            .ToDictionaryAsync(t => t.Id, ct);
 
-        return new StarredItems(artists, albums, tracks);
+        // Hydration does not preserve the star order; project back onto the ordered IDs.
+        // Missing library items are omitted without disturbing the remaining favorites.
+        return new StarredItems(
+            artistIds.Where(artists.ContainsKey).Select(id => artists[id]).ToList(),
+            albumIds.Where(albums.ContainsKey).Select(id => albums[id]).ToList(),
+            trackIds.Where(tracks.ContainsKey).Select(id => tracks[id]).ToList());
     }
 
     public async Task<IReadOnlyList<Album>> GetStarredAlbumsAsync(

@@ -6,6 +6,7 @@ public record StarredItems(IReadOnlyList<Artist> Artists, IReadOnlyList<Album> A
 
 public interface IStarService
 {
+    /// <summary>Each item type ordered by when the caller favorited it, newest first.</summary>
     Task<StarredItems> GetStarredAsync(Guid userId, CancellationToken ct = default);
 
     /// <summary>

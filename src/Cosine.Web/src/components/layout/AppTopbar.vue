@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { Search, LogOut, User as UserIcon, Command } from 'lucide-vue-next';
+import { Search, LogOut, User as UserIcon, Command, BarChart3 } from 'lucide-vue-next';
 import { useAuthStore } from '@/stores/auth';
 import { useUiStore } from '@/stores/ui';
 import ContextMenu, { type MenuItem } from '@/components/ui/ContextMenu.vue';
@@ -33,6 +33,7 @@ const menuItems: MenuItem[] = [
       router.push({ name: 'profile' });
     },
   },
+  { label: 'Listening insights', icon: BarChart3, onSelect: () => { router.push({ name: 'insights' }); } },
   { separator: true, label: '' },
   {
     label: 'Sign out',

@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, type Ref } from 'vue';
 import { Sparkles, Radio } from 'lucide-vue-next';
-import { getAlbumList2, getRandomSongs, getStarred2, getNowPlaying } from '@/api/lists';
+import { getAlbumList2, getRandomSongs, getStarred2 } from '@/api/lists';
 import { getPlaylists, getPlaylist, isSystemPlaylist } from '@/api/playlists';
-import type { NowPlayingEntry } from '@/api/lists';
 import { useAuthStore } from '@/stores/auth';
 import { useFavoritesStore } from '@/stores/favorites';
 import { usePlayback } from '@/composables/usePlayback';
@@ -11,10 +10,7 @@ import { useDeferredLoading } from '@/composables/useDeferredLoading';
 import SectionHeader from '@/components/ui/SectionHeader.vue';
 import Shelf from '@/components/ui/Shelf.vue';
 import AlbumCard from '@/components/AlbumCard.vue';
-import ArtistCredit from '@/components/ArtistCredit.vue';
 import TrackRow from '@/components/TrackRow.vue';
-import PlayButton from '@/components/ui/PlayButton.vue';
-import CoverArt from '@/components/CoverArt.vue';
 import Skeleton from '@/components/ui/Skeleton.vue';
 import SkeletonShelf from '@/components/ui/SkeletonShelf.vue';
 import SkeletonTrackList from '@/components/ui/SkeletonTrackList.vue';
@@ -36,9 +32,8 @@ interface Section<T> {
 /**
  * One independently-loading home section.
  *
- * The page used to `Promise.allSettled` all seven requests and reveal
- * everything at once, which meant the slowest endpoint set the speed of the
- * whole page - a sluggish `getNowPlaying` held the album shelves hostage. Each
+ * The sections load independently so a slower request does not hold up
+ * the rest of the home page. Each
  * section now resolves on its own and fills its own slot.
  *
  * Sections keep their place in the layout while loading, so nothing that
@@ -65,7 +60,6 @@ function useSection<T>(initial: T, load: () => Promise<T>): Section<T> & { run: 
 
 const releaseRadarId = ref<string | null>(null);
 
-const nowPlaying = useSection<NowPlayingEntry[]>([], () => getNowPlaying());
 const discovery = useSection<Track[]>([], () => getRandomSongs({ size: 12 }));
 const newest = useSection<Album[]>([], () => getAlbumList2('newest', { size: 18 }));
 const recent = useSection<Album[]>([], () => getAlbumList2('recent', { size: 18 }));
@@ -87,7 +81,7 @@ const releaseRadar = useSection<Track[]>([], async () => {
   return (await getPlaylist(radar.id)).entry;
 });
 
-const sections = [nowPlaying, discovery, releaseRadar, newest, recent, frequent, favTracks, random];
+const sections = [discovery, releaseRadar, newest, recent, frequent, favTracks, random];
 
 /** The library-is-empty message can only be honest once the album shelves have answered. */
 const libraryEmpty = computed(
@@ -134,33 +128,6 @@ function playReleaseRadar() {
     </div>
 
     <div class="space-y-12">
-      <!-- Listening now -->
-      <SkeletonShelf v-if="nowPlaying.pending" :count="4" />
-      <section v-else-if="nowPlaying.data.length" class="reveal">
-        <SectionHeader title="Listening now" />
-        <Shelf>
-          <div
-            v-for="(entry, i) in nowPlaying.data"
-            :key="`${entry.id}-${i}`"
-            class="w-44 shrink-0 snap-start sm:w-48"
-          >
-            <div class="group/card w-full">
-              <div class="relative overflow-hidden rounded-control">
-                <CoverArt :cover-art="entry.coverArt ?? entry.albumId ?? entry.id" :alt="entry.title" :size="400" />
-                <div class="pointer-events-none absolute bottom-2 right-2 opacity-0 transition-opacity group-hover/card:pointer-events-auto group-hover/card:opacity-100">
-                  <PlayButton size="md" @click.stop="playTracks([entry], 0)" />
-                </div>
-              </div>
-              <div class="mt-3 truncate font-medium text-text">{{ entry.title }}</div>
-              <div class="truncate text-sm text-muted">
-                <!-- No username suffix: the shelf only ever shows the viewer's own sessions. -->
-                <ArtistCredit :track="entry" class="inline" />
-              </div>
-            </div>
-          </div>
-        </Shelf>
-      </section>
-
       <!-- Random discovery -->
       <div v-if="discovery.pending">
         <div class="mb-4 flex items-center" :style="{ height: 'calc(var(--text-title) * 1.1)' }">
