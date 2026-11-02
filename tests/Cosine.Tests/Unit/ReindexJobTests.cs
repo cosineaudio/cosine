@@ -30,7 +30,7 @@ public class ReindexJobTests
     }
 
     private static AdminController CreateController()
-        => new(null!, null!, null!, null!, null!, NullLogger<AdminController>.Instance)
+        => new(null!, null!, null!, null!, null!, null!, NullLogger<AdminController>.Instance)
         {
             ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() },
         };

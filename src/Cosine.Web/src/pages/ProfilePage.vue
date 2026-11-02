@@ -2,11 +2,44 @@
 import { ref, computed, onMounted } from 'vue';
 import { toast } from 'vue-sonner';
 import { Copy, Check, Eye, EyeOff, KeyRound, Cable } from 'lucide-vue-next';
-import { authApi, type Profile } from '@/api/auth';
+import { authApi, type Profile, type AuthConfiguration } from '@/api/auth';
+import { useRouter, useRoute } from 'vue-router';
+import { useAuthStore } from '@/stores/auth';
 import Skeleton from '@/components/ui/Skeleton.vue';
 import { useDeferredLoading } from '@/composables/useDeferredLoading';
 
 const profile = ref<Profile | null>(null);
+const config = ref<AuthConfiguration | null>(null);
+const actionError = ref<string | null>(null);
+const actionLoading = ref(false);
+const router = useRouter();
+const route = useRoute();
+const auth = useAuthStore();
+
+async function linkIdentity() {
+  actionLoading.value = true;
+  actionError.value = null;
+  try {
+    const { redirectUrl } = await authApi.linkOidc();
+    window.location.assign(redirectUrl);
+  } catch (e) {
+    actionError.value = e instanceof Error ? e.message : 'Could not start account linking';
+    actionLoading.value = false;
+  }
+}
+
+async function rotateCredentials() {
+  if (!window.confirm('Rotate your client token and sign out all sessions? You will need to reconnect your Subsonic clients.')) return;
+  actionLoading.value = true;
+  actionError.value = null;
+  try {
+    await authApi.rotateCredentials();
+    auth.clearSession();
+    await router.push('/login');
+  } catch (e) {
+    actionError.value = e instanceof Error ? e.message : 'Could not rotate credentials';
+  } finally { actionLoading.value = false; }
+}
 const loading = ref(true);
 const showSkeleton = useDeferredLoading(loading);
 const error = ref(false);
@@ -40,7 +73,7 @@ async function copy(label: string, value: string) {
 
 onMounted(async () => {
   try {
-    profile.value = await authApi.profile();
+    [profile.value, config.value] = await Promise.all([authApi.profile(), authApi.config()]);
   } catch {
     error.value = true;
   } finally {
@@ -113,6 +146,17 @@ onMounted(async () => {
         </div>
       </section>
 
+      <section v-if="config?.oidcEnabled" class="mb-10 rounded-control border border-border bg-surface p-5">
+        <h2 class="font-display text-lg font-bold">Single sign-on</h2>
+        <p v-if="profile.oidcLinked" class="mt-2 text-sm text-muted">Your account is connected to {{ config.oidcDisplayName }}.</p>
+        <template v-else>
+          <p class="mt-2 text-sm text-muted">Connect {{ config.oidcDisplayName }} to keep using this account and its library data. Sign in again first if your session is more than five minutes old.</p>
+          <button type="button" :disabled="actionLoading" class="mt-4 rounded-control border border-border px-4 py-2 text-sm hover:bg-surface-2" @click="linkIdentity">Connect {{ config.oidcDisplayName }}</button>
+        </template>
+        <p v-if="route.query.authError" role="alert" class="mt-3 text-sm text-danger">The identity could not be connected. Please try again, or check whether it belongs to another account.</p>
+      </section>
+      <p v-if="actionError" role="alert" class="mb-5 text-sm text-danger">{{ actionError }}</p>
+
       <!-- connect a client -->
       <section>
         <div class="mb-4 flex items-center gap-2">
@@ -124,7 +168,7 @@ onMounted(async () => {
           <p class="mb-5 text-sm leading-relaxed text-muted">
             Subsonic apps like Feishin, Symfonium or DSub connect with the details below.
             Use the <span class="text-text">token as your password</span> - your account
-            password only works when the app's <span class="text-text">legacy authentication</span> option is enabled.
+            password only works when the app's <span class="text-text">legacy authentication</span> option is enabled and password login is available for your account.
           </p>
 
           <div class="grid gap-4">
@@ -193,6 +237,7 @@ onMounted(async () => {
               </p>
             </div>
           </div>
+          <button type="button" :disabled="actionLoading" class="mt-5 rounded-control border border-border px-4 py-2 text-sm hover:bg-surface-2" @click="rotateCredentials">Rotate token and sign out all sessions</button>
         </div>
       </section>
     </template>

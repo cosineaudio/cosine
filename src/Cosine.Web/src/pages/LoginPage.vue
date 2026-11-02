@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { LogIn } from 'lucide-vue-next'
 import { useAuthStore } from '../stores/auth'
 import Spinner from '../components/ui/Spinner.vue'
+import { authApi, type AuthConfiguration } from '../api/auth'
 
 const router = useRouter()
 const route = useRoute()
@@ -13,14 +14,33 @@ const username = ref('')
 const password = ref('')
 const error = ref<string | null>(null)
 const loading = ref(false)
+const config = ref<AuthConfiguration | null>(null)
+const configError = ref(false)
+const providerError = computed(() => {
+  if (route.query.authError === 'account') return 'This identity could not be connected. Sign in with your local account and link it from Profile, or ask an administrator for access.'
+  if (route.query.authError === 'denied') return 'Single sign-on was cancelled or access was denied.'
+  if (route.query.authError) return 'Single sign-on failed. Please try again.'
+  return null
+})
+const destination = computed(() => {
+  const value = route.query.redirect
+  return typeof value === 'string' && value.startsWith('/') && !/^[/][\\/]/.test(value) && !/[\x00-\x1f\x7f]/.test(value) ? value : '/'
+})
+const oidcLoginUrl = computed(() => '/auth/oidc/login?returnUrl=' + encodeURIComponent(destination.value))
+
+async function loadConfig() {
+  configError.value = false
+  try { config.value = await authApi.config() }
+  catch { configError.value = true }
+}
+onMounted(loadConfig)
 
 async function handleLogin() {
   error.value = null
   loading.value = true
   try {
     await auth.login(username.value, password.value)
-    const redirect = (route.query.redirect as string) || '/'
-    router.push(redirect)
+    router.push(destination.value)
   } catch {
     error.value = auth.error || 'Login failed'
   } finally {
@@ -58,10 +78,20 @@ async function handleLogin() {
 
         <div class="mb-8">
           <h2 class="font-display text-title font-semibold tracking-tight text-text">Sign in</h2>
-          <p class="mt-1 text-sm text-muted">Enter your credentials to start listening.</p>
+          <p class="mt-1 text-sm text-muted">Sign in to start listening.</p>
         </div>
 
-        <form class="space-y-5" @submit.prevent="handleLogin">
+        <p v-if="providerError" class="mb-5 text-sm text-danger" role="alert">{{ providerError }}</p>
+        <div v-if="configError" class="mb-5 text-sm text-danger" role="alert">
+          Could not load sign-in options.
+          <button class="underline" type="button" @click="loadConfig">Try again</button>
+        </div>
+        <Spinner v-else-if="!config" size="md" />
+        <a v-if="config?.oidcEnabled" :href="oidcLoginUrl"
+          class="mb-6 flex w-full items-center justify-center rounded-control border border-border bg-surface px-4 py-3 font-medium hover:bg-surface-2">
+          Sign in with {{ config.oidcDisplayName }}
+        </a>
+        <form v-if="config?.localLoginEnabled" class="space-y-5" @submit.prevent="handleLogin">
           <div>
             <label for="username" class="label mb-2 block">Username</label>
             <input

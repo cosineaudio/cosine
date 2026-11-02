@@ -1,0 +1,77 @@
+{
+  "realm": "cosine-dev",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": false,
+  "clients": [
+    {
+      "clientId": "cosine",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "local-development-client-secret",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": [
+        "http://localhost:8088/auth/oidc/callback",
+        "http://localhost:5173/auth/oidc/callback",
+        "http://localhost:5222/auth/oidc/callback"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "defaultClientScopes": [
+        "profile",
+        "email"
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "alice",
+      "enabled": true,
+      "email": "alice@example.test",
+      "emailVerified": true,
+      "firstName": "Alice",
+      "lastName": "Test",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "local-oidc-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "owner",
+      "enabled": true,
+      "email": "owner@example.test",
+      "emailVerified": true,
+      "firstName": "Owner",
+      "lastName": "Test",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "local-oidc-password",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "bob",
+      "enabled": true,
+      "email": "bob@example.test",
+      "emailVerified": true,
+      "firstName": "Bob",
+      "lastName": "Test",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "local-oidc-password",
+          "temporary": false
+        }
+      ]
+    }
+  ]
+}

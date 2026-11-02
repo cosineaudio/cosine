@@ -11,7 +11,7 @@ public class EntityTests
 
         Assert.Equal(Guid.Empty, user.Id);
         Assert.Equal(string.Empty, user.Username);
-        Assert.Equal(string.Empty, user.PasswordHash);
+        Assert.Null(user.PasswordHash);
         Assert.False(user.IsAdmin);
         Assert.NotNull(user.Playlists);
         Assert.NotNull(user.Stars);

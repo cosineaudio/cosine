@@ -103,6 +103,8 @@ export interface AudioAnalysisStatus {
 }
 
 export interface UserDto {
+  source: 'local' | 'oidc' | 'local+oidc'
+  hasLocalPassword: boolean
   id: string
   username: string
   email?: string

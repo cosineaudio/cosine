@@ -25,7 +25,7 @@ export default defineConfig({
       },
       '/auth': {
         target: 'http://localhost:5222',
-        changeOrigin: true,
+        changeOrigin: false,
       },
       '/hubs': {
         target: 'http://localhost:5222',

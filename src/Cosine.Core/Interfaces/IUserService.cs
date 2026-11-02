@@ -18,8 +18,11 @@ public interface IUserService
     /// </summary>
     Task ChangePasswordAsync(Guid id, string currentPassword, string newPassword, CancellationToken ct = default);
 
+    /// <summary>Rotates the Subsonic credential and revokes all existing browser sessions.</summary>
+    Task RotateCredentialsAsync(Guid id, CancellationToken ct = default);
+
     /// <summary>
-    /// Administrative password reset - no knowledge of the existing password required.
+    /// Administrative password reset for an account with a local password.
     /// Callers must have already authorized the request.
     /// </summary>
     Task ResetPasswordAsync(Guid id, string newPassword, CancellationToken ct = default);

@@ -1,45 +1,118 @@
-using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using System.Text;
 using Cosine.Api.Middleware;
 using Cosine.Core.Interfaces;
 using Cosine.Core.Options;
-using Cosine.Core.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
-using Microsoft.IdentityModel.Tokens;
+using Cosine.Api.Authentication;
+using Cosine.Infrastructure.Services;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.Extensions.Caching.Distributed;
+using System.Security.Cryptography;
 
 namespace Cosine.Api.Controllers;
 
 [ApiController]
 [Route("auth")]
+[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public class AuthController : ControllerBase
 {
     private readonly IUserService _userService;
     private readonly IAuthThrottle _throttle;
-    private readonly JwtOptions _jwtOptions;
+    private readonly SessionIssuer _sessions;
+    private readonly ExternalIdentityService _identities;
+    private readonly IDistributedCache _cache;
     private readonly AuthOptions _authOptions;
     private readonly ILogger<AuthController> _logger;
 
     public AuthController(
         IUserService userService,
         IAuthThrottle throttle,
-        IOptions<JwtOptions> jwtOptions,
+        SessionIssuer sessions,
+        ExternalIdentityService identities,
+        IDistributedCache cache,
         IOptions<AuthOptions> authOptions,
         ILogger<AuthController> logger)
     {
         _userService = userService;
         _throttle = throttle;
-        _jwtOptions = jwtOptions.Value;
+        _sessions = sessions;
+        _identities = identities;
+        _cache = cache;
         _authOptions = authOptions.Value;
         _logger = logger;
+    }
+
+    [HttpGet("config")]
+    [AllowAnonymous]
+    public IActionResult Config() => Ok(new
+    {
+        _authOptions.LocalLoginEnabled,
+        OidcEnabled = _authOptions.Oidc.Enabled,
+        OidcDisplayName = _authOptions.Oidc.DisplayName
+    });
+
+    [HttpGet("oidc/login")]
+    [AllowAnonymous]
+    public IActionResult OidcLogin(string? returnUrl = null)
+    {
+        if (!_authOptions.Oidc.Enabled) return NotFound();
+        return Challenge(new AuthenticationProperties
+        {
+            RedirectUri = OidcAuthentication.IsLocalPath(returnUrl) ? returnUrl : "/"
+        }, OidcAuthentication.Scheme);
+    }
+
+    [HttpPost("oidc/link")]
+    [Authorize]
+    public async Task<IActionResult> Link(CancellationToken ct)
+    {
+        if (!_authOptions.Oidc.Enabled) return NotFound();
+        if (!long.TryParse(User.FindFirstValue("auth_time"), out var authenticatedAt)
+            || authenticatedAt > DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+            || DateTimeOffset.UtcNow.ToUnixTimeSeconds() - authenticatedAt > 300)
+            return StatusCode(403, new { error = "Sign out and sign in again before linking an identity" });
+
+        var ticket = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+        var binding = User.FindFirstValue(ClaimTypes.NameIdentifier) + ":" + User.FindFirstValue(Core.Security.SecurityStamp.ClaimType);
+        await _cache.SetStringAsync("oidc-link:" + ticket, binding,
+            new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5) }, ct);
+        return Ok(new { redirectUrl = "/auth/oidc/link-start?ticket=" + ticket });
+    }
+
+    [HttpGet("oidc/link-start")]
+    [Authorize]
+    public async Task<IActionResult> LinkStart(string ticket, CancellationToken ct)
+    {
+        if (!_authOptions.Oidc.Enabled) return NotFound();
+        if (ticket.Length != 64) return BadRequest();
+        var key = "oidc-link:" + ticket;
+        var binding = await _cache.GetStringAsync(key, ct);
+        await _cache.RemoveAsync(key, ct);
+        var expected = User.FindFirstValue(ClaimTypes.NameIdentifier) + ":" + User.FindFirstValue(Core.Security.SecurityStamp.ClaimType);
+        if (binding is null || binding != expected) return Forbid();
+        var properties = new AuthenticationProperties { RedirectUri = "/profile", ExpiresUtc = DateTimeOffset.UtcNow.AddMinutes(5) };
+        properties.Items[OidcAuthentication.LinkBinding] = binding;
+        return Challenge(properties, OidcAuthentication.Scheme);
+    }
+
+    [HttpPost("rotate-credentials")]
+    [Authorize]
+    public async Task<IActionResult> RotateCredentials(CancellationToken ct)
+    {
+        await _userService.RotateCredentialsAsync(Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!), ct);
+        Response.Cookies.Delete("cosine_auth", new CookieOptions { Path = "/" });
+        return NoContent();
     }
 
     [HttpPost("login")]
     [AllowAnonymous]
     public async Task<IActionResult> Login([FromBody] LoginRequest request, CancellationToken ct)
     {
+        if (!_authOptions.LocalLoginEnabled)
+            return StatusCode(403, new { error = "Password login is disabled" });
+
         var throttleKey = AuthThrottleKey.For(HttpContext, request.Username);
         if (_throttle.IsLocked(throttleKey))
         {
@@ -51,8 +124,7 @@ public class AuthController : ControllerBase
         try
         {
             var user = await _userService.AuthenticateAsync(request.Username, request.Password, ct);
-            var token = GenerateJwt(user);
-            SetJwtCookie(token);
+            _sessions.Issue(HttpContext, user, "password");
             _throttle.RecordSuccess(throttleKey);
 
             _logger.LogInformation("Login succeeded for '{Username}'", user.Username);
@@ -77,7 +149,7 @@ public class AuthController : ControllerBase
     [HttpPost("logout")]
     public IActionResult Logout()
     {
-        Response.Cookies.Delete("cosine_auth");
+        Response.Cookies.Delete("cosine_auth", new CookieOptions { Path = "/" });
         return Ok();
     }
 
@@ -98,6 +170,8 @@ public class AuthController : ControllerBase
             user.IsAdmin,
             user.CreatedAt,
             user.LastLoginAt,
+            HasLocalPassword = user.PasswordHash is not null,
+            OidcLinked = _authOptions.Oidc.Enabled && await _identities.IsLinkedAsync(user.Id, ct),
             // The secret Subsonic clients must use as their "password" for token auth.
             SubsonicToken = user.SubsonicSecret
         });
@@ -116,45 +190,6 @@ public class AuthController : ControllerBase
             Id = userId,
             Username = username,
             IsAdmin = isAdmin == "True"
-        });
-    }
-
-    private string GenerateJwt(Core.Entities.User user)
-    {
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtOptions.SigningKey));
-        var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-
-        var claims = new[]
-        {
-            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-            new Claim(ClaimTypes.Name, user.Username),
-            new Claim("IsAdmin", user.IsAdmin.ToString()),
-            // Lets the token be revoked before it expires - see SecurityStamp.
-            new Claim(SecurityStamp.ClaimType, SecurityStamp.For(user))
-        };
-
-        var token = new JwtSecurityToken(
-            issuer: _jwtOptions.Issuer,
-            audience: _jwtOptions.Audience,
-            claims: claims,
-            expires: DateTime.UtcNow.AddMinutes(_jwtOptions.ExpirationMinutes),
-            signingCredentials: credentials);
-
-        return new JwtSecurityTokenHandler().WriteToken(token);
-    }
-
-    private void SetJwtCookie(string token)
-    {
-        Response.Cookies.Append("cosine_auth", token, new CookieOptions
-        {
-            HttpOnly = true,
-            // A Secure cookie is silently dropped by the browser on a plain-HTTP origin, which
-            // makes login return 200 and leave the user logged out on any LAN deployment
-            // (localhost is exempt, which is why this only bites off-box). Mirror the request
-            // scheme by default; Auth__SecureCookie=true forces it on behind a TLS proxy.
-            Secure = _authOptions.SecureCookie ?? Request.IsHttps,
-            SameSite = SameSiteMode.Lax,
-            Expires = DateTimeOffset.UtcNow.AddMinutes(_jwtOptions.ExpirationMinutes)
         });
     }
 }

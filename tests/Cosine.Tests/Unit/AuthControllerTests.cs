@@ -1,4 +1,5 @@
 using Cosine.Api.Controllers;
+using Cosine.Api.Authentication;
 using Cosine.Core.Options;
 using Cosine.Infrastructure.Services;
 using Microsoft.AspNetCore.Http;
@@ -27,7 +28,9 @@ public class AuthControllerTests
         var controller = new AuthController(
             sp.Get<UserService>(),
             new AuthThrottle(Options.Create(authOptions ?? new AuthOptions())),
-            jwt,
+            new SessionIssuer(jwt, Options.Create(authOptions ?? new AuthOptions())),
+            new ExternalIdentityService(sp.DbContext, Options.Create(authOptions ?? new AuthOptions())),
+            sp.Cache,
             Options.Create(authOptions ?? new AuthOptions()),
             new LoggerFactory().CreateLogger<AuthController>());
 

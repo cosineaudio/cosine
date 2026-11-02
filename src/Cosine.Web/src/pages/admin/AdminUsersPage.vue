@@ -140,7 +140,7 @@ onMounted(fetchUsers)
     <SkeletonTable
       v-if="showSkeleton"
       :rows="6"
-      :headers="['Username', 'Email', 'Role', 'Last login', 'Created', '']"
+      :headers="['Username', 'Email', 'Source', 'Role', 'Last login', 'Created', '']"
     />
     <template v-else-if="loading" />
     <div v-else-if="error" class="rounded-control border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">{{ error }}</div>
@@ -152,6 +152,7 @@ onMounted(fetchUsers)
             <tr class="border-b border-border text-left">
               <th class="label p-3">Username</th>
               <th class="label p-3">Email</th>
+              <th class="label p-3">Source</th>
               <th class="label p-3">Role</th>
               <th class="label p-3">Last login</th>
               <th class="label p-3">Created</th>
@@ -166,6 +167,7 @@ onMounted(fetchUsers)
             >
               <td class="p-3 font-medium text-text">{{ user.username }}</td>
               <td class="p-3 text-muted">{{ user.email || '-' }}</td>
+              <td class="p-3 text-muted whitespace-nowrap">{{ user.source === 'local+oidc' ? 'Local + OIDC' : user.source === 'oidc' ? 'OIDC' : 'Local' }}</td>
               <td class="p-3">
                 <span :class="[
                   'rounded-[3px] px-2 py-0.5 text-xs font-medium uppercase tracking-wide',
@@ -241,10 +243,11 @@ onMounted(fetchUsers)
             <label class="label mb-1.5 block">Email</label>
             <input v-model="editEmail" type="email" class="w-full rounded-control border border-border bg-surface-2 px-3 py-2 text-sm text-text placeholder:text-faint focus:border-transparent" />
           </div>
-          <div>
+          <div v-if="editingUser.hasLocalPassword">
             <label class="label mb-1.5 block">New password (leave blank to keep)</label>
             <input v-model="editPassword" type="password" class="w-full rounded-control border border-border bg-surface-2 px-3 py-2 text-sm text-text placeholder:text-faint focus:border-transparent" />
           </div>
+          <p v-if="!editingUser.hasLocalPassword" class="text-sm text-muted">This account uses single sign-on. Manage its password at the identity provider.</p>
           <label class="flex items-center gap-2 text-sm text-text">
             <input v-model="editIsAdmin" type="checkbox" class="accent-white" />
             Admin user
