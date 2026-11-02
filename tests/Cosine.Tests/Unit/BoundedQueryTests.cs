@@ -152,7 +152,7 @@ public class BoundedQueryTests
         public DateTimeOffset? Since { get; private set; }
 
         public Task<Core.Interfaces.RecapDto> GetRecapAsync(
-            Guid? userId = null, DateTimeOffset? since = null, int topN = 10, CancellationToken ct = default)
+            Guid? userId = null, DateTimeOffset? since = null, int topN = 10, CancellationToken ct = default, DateTimeOffset? until = null)
         {
             Since = since;
             return Task.FromResult(new Core.Interfaces.RecapDto(0, 0, 0, 0, [], [], [], [], []));

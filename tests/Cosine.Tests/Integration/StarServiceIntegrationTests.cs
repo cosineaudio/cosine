@@ -41,6 +41,35 @@ public class StarServiceIntegrationTests : IClassFixture<IntegrationTestFixture>
     }
 
     [Fact]
+    public async Task GetStarred_ReturnsEveryTypeNewestFavoriteFirstForTheCaller()
+    {
+        var db = _fixture.DbContext;
+        var service = new StarService(db, _cache);
+        var first = await SeedArtistAlbumTrackAsync("order_first");
+        var second = await SeedArtistAlbumTrackAsync("order_second");
+        var third = await SeedArtistAlbumTrackAsync("order_third");
+        var date = DateTimeOffset.UtcNow;
+        // Favoriting order differs from library insertion order and title order.
+        foreach (var (items, days) in new[] { (first, -2), (second, 0), (third, -1) })
+        {
+            db.Stars.AddRange(
+                new Star { UserId = first.User.Id, ItemType = "artist", ItemId = items.Artist.Id, CreatedAt = date.AddDays(days) },
+                new Star { UserId = first.User.Id, ItemType = "album", ItemId = items.Album.Id, CreatedAt = date.AddDays(days) },
+                new Star { UserId = first.User.Id, ItemType = "track", ItemId = items.Track.Id, CreatedAt = date.AddDays(days) });
+        }
+        // Another user's later favorite must not affect this user's ordering.
+        db.Stars.Add(new Star { UserId = second.User.Id, ItemType = "track", ItemId = first.Track.Id, CreatedAt = date.AddDays(1) });
+        db.Stars.Add(new Star { UserId = first.User.Id, ItemType = "track", ItemId = Guid.NewGuid(), CreatedAt = date.AddDays(2) });
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
+
+        var result = await service.GetStarredAsync(first.User.Id);
+        Assert.Equal(new[] { second.Artist.Id, third.Artist.Id, first.Artist.Id }, result.Artists.Select(a => a.Id));
+        Assert.Equal(new[] { second.Album.Id, third.Album.Id, first.Album.Id }, result.Albums.Select(a => a.Id));
+        Assert.Equal(new[] { second.Track.Id, third.Track.Id, first.Track.Id }, result.Tracks.Select(t => t.Id));
+    }
+
+    [Fact]
     public async Task Star_Increments_Denormalized_Count()
     {
         var db = _fixture.DbContext;

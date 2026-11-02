@@ -40,7 +40,7 @@ public class StatsService : IStatsService
             .ToListAsync(ct);
     }
 
-    public async Task<RecapDto> GetRecapAsync(Guid? userId = null, DateTimeOffset? since = null, int topN = 10, CancellationToken ct = default)
+    public async Task<RecapDto> GetRecapAsync(Guid? userId = null, DateTimeOffset? since = null, int topN = 10, CancellationToken ct = default, DateTimeOffset? until = null)
     {
         topN = Math.Clamp(topN, 1, 50);
 
@@ -49,6 +49,9 @@ public class StatsService : IStatsService
             plays = plays.Where(p => p.UserId == uid);
         if (since is DateTimeOffset s)
             plays = plays.Where(p => p.PlayedAt >= s);
+
+        if (until is DateTimeOffset end)
+            plays = plays.Where(p => p.PlayedAt < end);
 
         var totalPlays = await plays.LongCountAsync(ct);
         if (totalPlays == 0)

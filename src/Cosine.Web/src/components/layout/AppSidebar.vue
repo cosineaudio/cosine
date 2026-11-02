@@ -2,7 +2,7 @@
 import { computed } from 'vue';
 import {
   Home, Search, Disc3, Mic2, Tags,
-  Heart, ListMusic, Clock, Radio,
+  Heart, ListMusic, Clock, Radio, BarChart3,
   ListVideo, PanelLeftClose, PanelLeft, SlidersHorizontal,
 } from 'lucide-vue-next';
 import { useAuthStore } from '@/stores/auth';
@@ -27,6 +27,7 @@ const library = [
   { name: 'favorites', label: 'Favorites', icon: Heart },
   { name: 'playlists', label: 'Playlists', icon: ListMusic },
   { name: 'history', label: 'History', icon: Clock },
+  { name: 'insights', label: 'Insights', icon: BarChart3 },
   { name: 'radio', label: 'Radio', icon: Radio },
 ];
 
@@ -61,7 +62,8 @@ const pinned = computed(() => pinnedPlaylists.value.slice(0, 8));
           <RouterLink
             :to="{ name: item.name }"
             class="group flex items-center gap-3 rounded-control px-3 py-2 text-sm font-medium text-muted transition-colors hover:bg-surface-2 hover:text-text"
-            active-class="!bg-surface-2 !text-text"
+            :active-class="item.name === 'home' ? '' : '!bg-surface-2 !text-text'"
+            exact-active-class="!bg-surface-2 !text-text"
             :title="collapsed ? item.label : undefined"
           >
             <component :is="item.icon" :size="19" :stroke-width="1.75" class="shrink-0" />

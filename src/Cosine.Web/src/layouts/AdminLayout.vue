@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useRoute } from 'vue-router'
-import { LayoutDashboard, Users, Settings, ScanLine, Speaker, ArrowLeft } from 'lucide-vue-next'
+import { LayoutDashboard, Users, Settings, ScanLine, Speaker, ArrowLeft, ShieldCheck } from 'lucide-vue-next'
 import type { Component } from 'vue'
 import NavProgress from '@/components/ui/NavProgress.vue'
 
@@ -10,6 +10,7 @@ const navItems: { name: string; label: string; path: string; icon: Component }[]
   { name: 'admin-dashboard', label: 'Dashboard', path: '/admin', icon: LayoutDashboard },
   { name: 'admin-users', label: 'Users', path: '/admin/users', icon: Users },
   { name: 'admin-settings', label: 'Settings', path: '/admin/settings', icon: Settings },
+  { name: 'admin-library-health', label: 'Library health', path: '/admin/library-health', icon: ShieldCheck },
   { name: 'admin-scanner', label: 'Scanner', path: '/admin/scanner', icon: ScanLine },
   { name: 'admin-devices', label: 'Playback devices', path: '/admin/devices', icon: Speaker },
 ]
