@@ -1,5 +1,5 @@
 # Stage 1: Build frontend
-FROM node:22-alpine AS frontend
+FROM node:22-bookworm-slim AS frontend
 WORKDIR /src
 COPY src/Cosine.Web/package*.json ./
 RUN npm ci
@@ -7,7 +7,7 @@ COPY src/Cosine.Web/ ./
 RUN npm run build
 
 # Stage 2: Build backend
-FROM mcr.microsoft.com/dotnet/sdk:10.0-alpine AS backend
+FROM mcr.microsoft.com/dotnet/sdk:10.0-noble AS backend
 WORKDIR /src
 COPY Cosine.slnx ./
 COPY src/Cosine.Audio/Cosine.Audio.csproj src/Cosine.Audio/
@@ -27,10 +27,12 @@ COPY --from=frontend /src/dist src/Cosine.Api/wwwroot/
 RUN dotnet publish src/Cosine.Api/Cosine.Api.csproj -c Release -o /app --no-restore -p:SkipFrontendBuild=true
 
 # Stage 3: Runtime
-FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine
-# su-exec lets the entrypoint drop from root to the requested PUID/PGID after chowning
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble
+# gosu lets the entrypoint drop from root to the requested PUID/PGID after chowning
 # the writable mounts.
-RUN apk add --no-cache ffmpeg icu-libs krb5-libs su-exec
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg libicu74 libgssapi-krb5-2 gosu \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=backend /app ./
 COPY LICENSE THIRD_PARTY_NOTICES.md /usr/share/doc/cosine/
@@ -46,5 +48,5 @@ ENV HOME=/app
 ENV PUID=1000
 ENV PGID=1000
 EXPOSE 8080
-# Starts as root, chowns the writable paths, then su-execs to PUID:PGID.
+# Starts as root, chowns the writable paths, then uses gosu to switch to PUID:PGID.
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
