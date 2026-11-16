@@ -16,4 +16,4 @@ mkdir -p "$CACHE" 2>/dev/null || true
 chown -R "$PUID:$PGID" "$CACHE" 2>/dev/null || true
 chown "$PUID:$PGID" /app 2>/dev/null || true
 
-exec su-exec "$PUID:$PGID" dotnet Cosine.Api.dll
+exec gosu "$PUID:$PGID" dotnet Cosine.Api.dll
