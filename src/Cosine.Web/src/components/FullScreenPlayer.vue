@@ -3,7 +3,7 @@ import { computed, nextTick, onUnmounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import {
   ChevronDown, Shuffle, SkipBack, SkipForward, Repeat, Repeat1,
-  ListMusic, Mic2, AudioLines, Volume2, Volume1, VolumeX,
+  ListMusic, Mic2, Volume2, Volume1, VolumeX,
   PanelRightClose, PanelRightOpen, Infinity as InfinityIcon, MoreHorizontal,
 } from 'lucide-vue-next';
 import { usePlaybackStore } from '@/stores/playback';
@@ -16,6 +16,8 @@ import FavoriteButton from '@/components/ui/FavoriteButton.vue';
 import ProgressScrubber from '@/components/ui/ProgressScrubber.vue';
 import NowPlayingBars from '@/components/ui/NowPlayingBars.vue';
 import Visualizer from '@/components/Visualizer.vue';
+import VisualizerPicker from '@/components/VisualizerPicker.vue';
+import { useVisualizer } from '@/composables/useVisualizer';
 import OutputPicker from '@/components/OutputPicker.vue';
 import QueueRow from '@/components/QueueRow.vue';
 import ContextMenu from '@/components/ui/ContextMenu.vue';
@@ -67,15 +69,7 @@ const tab = ref<'queue' | 'lyrics'>('queue');
 const visualizerAvailable = computed(() =>
   !!track.value && !track.value.streamUrl && player.canAnalyse);
 
-// Ambient visualizer is a persisted on/off preference, not a tab - it renders
-// as a backdrop behind whichever tab (queue/lyrics) is showing.
-const VISUALIZER_KEY = 'cosine_visualizer_on';
-const visualizerOn = ref((() => {
-  try { return localStorage.getItem(VISUALIZER_KEY) !== '0'; } catch { return true; }
-})());
-watch(visualizerOn, (on) => {
-  try { localStorage.setItem(VISUALIZER_KEY, on ? '1' : '0'); } catch { /* ignore */ }
-});
+const { selection: visualizerSelection, enabled: visualizerOn, placement: visualizerPlacement } = useVisualizer();
 const showVisualizer = computed(() => visualizerOn.value && visualizerAvailable.value);
 
 // Focus mode: collapse the right column (queue / lyrics) so the player centres.
@@ -311,13 +305,14 @@ function navTo(name: string, id?: string) {
       <!-- ambient visualizer: a faint, full-bleed spectrum floor behind the player -->
       <div
         v-if="showVisualizer"
-        class="pointer-events-none absolute inset-x-0 bottom-0 z-0 h-[45%] opacity-60"
-        :style="{
+        class="pointer-events-none absolute inset-x-0 bottom-0 z-0 opacity-60"
+        :class="visualizerPlacement === 'floor' ? 'h-[45%]' : 'top-0'"
+        :style="visualizerPlacement === 'floor' ? {
           maskImage: 'linear-gradient(to top, black 30%, transparent)',
           WebkitMaskImage: 'linear-gradient(to top, black 30%, transparent)',
-        }"
+        } : undefined"
       >
-        <Visualizer :tint="tint" :active="ui.fullScreenOpen && showVisualizer" />
+        <Visualizer :track-id="player.currentTrackId" :visualizer="visualizerSelection" :tint="tint" :active="ui.fullScreenOpen && showVisualizer" />
       </div>
 
       <div class="relative z-10 mx-auto flex h-full max-w-6xl flex-col px-4 pb-6 pt-4 sm:px-8">
@@ -473,7 +468,7 @@ function navTo(name: string, id?: string) {
                 </button>
               </div>
 
-              <!-- volume: mute (left), centered slider, visualizer toggle (right) -->
+              <!-- volume: mute (left), centered slider, visualizer picker (right) -->
               <div class="mt-5 grid grid-cols-[1fr_auto_1fr] items-center [filter:drop-shadow(0_1px_4px_rgb(0_0_0_/_0.6))]">
                 <button
                   type="button"
@@ -492,17 +487,7 @@ function navTo(name: string, id?: string) {
                   class="volume-slider h-1 w-40 cursor-pointer appearance-none rounded-full bg-surface-2"
                   @input="player.setVolume(parseFloat(($event.target as HTMLInputElement).value))"
                 />
-                <button
-                  v-if="visualizerAvailable"
-                  type="button"
-                  class="justify-self-end transition-colors"
-                  :class="visualizerOn ? 'text-accent' : 'text-muted hover:text-text'"
-                  :aria-pressed="visualizerOn"
-                  aria-label="Toggle visualizer"
-                  @click="visualizerOn = !visualizerOn"
-                >
-                  <AudioLines :size="18" :stroke-width="2" />
-                </button>
+                <VisualizerPicker v-if="visualizerAvailable" v-model="visualizerSelection" />
               </div>
             </div>
           </div>
