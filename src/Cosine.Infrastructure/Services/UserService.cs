@@ -131,7 +131,7 @@ public class UserService : IUserService
             throw new UnauthorizedAccessException("Current password is incorrect");
 
         user.PasswordHash = HashPassword(newPassword);
-        RotateCredentials(user);
+        await RevokeCredentialsAsync(user, ct);
         await _db.SaveChangesAsync(ct);
     }
 
@@ -143,7 +143,7 @@ public class UserService : IUserService
         if (user.PasswordHash is null)
             throw new InvalidOperationException("External-only accounts cannot be given a password through a password reset");
         user.PasswordHash = HashPassword(newPassword);
-        RotateCredentials(user);
+        await RevokeCredentialsAsync(user, ct);
         await _db.SaveChangesAsync(ct);
     }
 
@@ -151,7 +151,7 @@ public class UserService : IUserService
     {
         var user = await _db.Users.FindAsync([id], ct)
             ?? throw new InvalidOperationException("User not found");
-        RotateCredentials(user);
+        await RevokeCredentialsAsync(user, ct);
         await _db.SaveChangesAsync(ct);
     }
 
@@ -164,9 +164,16 @@ public class UserService : IUserService
     ///
     /// The cost is that Subsonic clients must be re-paired after a password change - that is
     /// the point, and it is documented in the README.
+    ///
+    /// Device refresh tokens (see <see cref="DeviceTokenService"/>) are removed in the same
+    /// save, so a stolen phone is signed out by a password change too.
     /// </summary>
-    private static void RotateCredentials(User user) =>
+    private async Task RevokeCredentialsAsync(User user, CancellationToken ct)
+    {
         user.SubsonicSecret = GenerateSubsonicSecret();
+        var devices = await _db.ApiKeys.Where(k => k.UserId == user.Id).ToListAsync(ct);
+        _db.ApiKeys.RemoveRange(devices);
+    }
 
     private static string HashPassword(string password)
     {

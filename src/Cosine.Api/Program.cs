@@ -135,6 +135,7 @@ builder.Services.AddSingleton<IAuthThrottle>(sp =>
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<ExternalIdentityService>();
 builder.Services.AddScoped<SessionIssuer>();
+builder.Services.AddScoped<DeviceTokenService>();
 builder.Services.AddScoped<ISettingsService, SettingsService>();
 builder.Services.AddScoped<IMediaLibraryService, MediaLibraryService>();
 builder.Services.AddScoped<IPlayHistoryService, PlayHistoryService>();
@@ -266,7 +267,18 @@ var authentication = builder.Services.AddAuthentication(opts =>
             // Read JWT from httpOnly cookie
             var token = context.Request.Cookies["cosine_auth"];
             if (!string.IsNullOrEmpty(token))
+            {
                 context.Token = token;
+                return Task.CompletedTask;
+            }
+
+            // Native clients send Authorization: Bearer, which the handler reads by itself -
+            // except on WebSockets, where the SignalR client can only put the token in the
+            // query string. Scoped to /hubs so a token in a URL is never honoured elsewhere.
+            var queryToken = context.Request.Query["access_token"].ToString();
+            if (!string.IsNullOrEmpty(queryToken)
+                && context.Request.Path.StartsWithSegments("/hubs", StringComparison.OrdinalIgnoreCase))
+                context.Token = queryToken;
             return Task.CompletedTask;
         },
         // A valid signature is not enough: without this a token issued before a password
