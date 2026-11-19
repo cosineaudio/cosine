@@ -54,7 +54,7 @@ it('moves grains on attacks, preserves input, settles on pause, and respects red
   renderer.dispose();
 });
 
-it('derives the pattern from frequency bands rather than track identity', () => {
+it('repeats a track seed while varying patterns with track identity and frequency bands', () => {
   function run(track: string, hz: number) {
     const points: number[] = [];
     const ctx = {
@@ -76,8 +76,48 @@ it('derives the pattern from frequency bands rather than track identity', () => 
     return points;
   }
   const bass = run('first-track', 100);
-  expect(run('different-track', 100)).toEqual(bass);
+  expect(run('first-track', 100)).toEqual(bass);
+  expect(run('different-track', 100)).not.toEqual(bass);
   expect(run('first-track', 3000)).not.toEqual(bass);
+});
+
+it('restores a track starting shape after another track and leaves the current track running', () => {
+  const points: number[] = [];
+  const ctx = { clearRect: vi.fn(), beginPath: vi.fn(), fill: vi.fn(),
+    rect: (x: number, y: number) => points.push(x, y) };
+  const canvas = document.createElement('canvas');
+  canvas.width = 800; canvas.height = 600;
+  vi.spyOn(canvas, 'getContext').mockReturnValue(ctx as unknown as CanvasRenderingContext2D);
+  const renderer = create(canvas, { sampleRate: 48000, fftSize: 2048 });
+  const draw = () => {
+    points.length = 0;
+    renderer.draw({ tint: '#336699', text: '#fff', muted: '#888' });
+    return [...points];
+  };
+  renderer.setTrack?.('first-track');
+  const start = draw();
+  renderer.update({ frequency: spectrum(true) }, false, 0.05);
+  const evolved = draw();
+  expect(evolved).not.toEqual(start);
+  renderer.setTrack?.('first-track');
+  expect(draw()).toEqual(evolved);
+  renderer.setTrack?.('different-track');
+  const other = draw();
+  // Compare spatial density as well as grain positions: the shape must differ.
+  const density = (coordinates: number[]) => {
+    const bins = new Array<number>(144).fill(0);
+    for (let i = 0; i < coordinates.length; i += 2) {
+      const col = Math.max(0, Math.min(11, Math.floor(coordinates[i]! / 800 * 12)));
+      const row = Math.max(0, Math.min(11, Math.floor(coordinates[i + 1]! / 600 * 12)));
+      bins[row * 12 + col]! += 1 / 18000;
+    }
+    return bins;
+  };
+  const initialDensity = density(start);
+  expect(density(other).reduce((sum, value, i) => sum + Math.abs(value - initialDensity[i]!), 0)).toBeGreaterThan(0.2);
+  renderer.setTrack?.('first-track');
+  expect(draw()).toEqual(start);
+  renderer.dispose();
 });
 
 it('responds to a bass attack masked by steady midrange loudness', () => {
