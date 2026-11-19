@@ -17,7 +17,7 @@ export const create: VisualizerFactory = (canvas, format) => {
   const grain = new Float32Array(count);
   const restingOffset = new Float32Array(count);
   const direction = new Float32Array(count);
-  const random = seededRandom('chladni');
+  let random = seededRandom('chladni');
   let lastTrack: string | null | undefined;
 
   const detector = createChladniAttacks(format);
@@ -52,6 +52,7 @@ export const create: VisualizerFactory = (canvas, format) => {
     { family: 'stripes', order: 6, angle: 1.1 },
   ];
   const weights = new Float32Array(modes.length);
+  const modeOrder = modes.map((_, index) => index);
   weights[3] = 1;
   const energies = new Float32Array(modes.length);
   const gridSize = 97;
@@ -106,8 +107,8 @@ export const create: VisualizerFactory = (canvas, format) => {
     for (let band = 0; band < modes.length; band++) {
       const weight = weights[band]!;
       if (weight < 0.0001) continue;
-      const surface = surfaces[(band + stage * 5) % modes.length]!;
-      const next = surfaces[(band + (stage + 1) * 5) % modes.length]!;
+      const surface = surfaces[modeOrder[(band + stage * 5) % modes.length]!]!;
+      const next = surfaces[modeOrder[(band + (stage + 1) * 5) % modes.length]!]!;
       for (let i = 0; i < field.length; i++) field[i]! += (surface[i]! * (1 - blend) + next[i]! * blend) * weight;
     }
   }
@@ -196,9 +197,22 @@ export const create: VisualizerFactory = (canvas, format) => {
     setTrack(id) {
       if (id === lastTrack) return;
       lastTrack = id;
-      // Track identity never selects a pattern; measured band energy does.
+      random = seededRandom(id ?? 'chladni');
+      // Shuffle from canonical order so revisiting a track reproduces its shapes.
+      for (let i = 0; i < modes.length; i++) modeOrder[i] = i;
+      for (let i = modeOrder.length - 1; i > 0; i--) {
+        const j = Math.floor(random() * (i + 1));
+        [modeOrder[i], modeOrder[j]] = [modeOrder[j]!, modeOrder[i]!];
+      }
+      weights.fill(0);
+      weights[3] = 1;
+      evolution = 0;
+      vibrationPhase = 0;
       detector.reset();
       activity = 0; radialPulse = 0; widthPulse = 0;
+      // Track identity selects the geometries; measured band energy mixes them.
+      mixField();
+      seed();
       settlingTime = 1.2;
     },
     resize(size) { dpr = size.dpr; },
