@@ -7,7 +7,7 @@ export const visualizers: readonly VisualizerDefinition[] = [
   { id: 'metaballs', name: 'Meld', placement: 'full', maxPixels: 600_000, audio: 'frequency', load: () => import('./renderers/metaballs') },
   { id: 'aurora', name: 'Aurora', placement: 'full', maxPixels: 450_000, audio: 'frequency', load: () => import('./renderers/aurora') },
   { id: 'ink', name: 'Ink', placement: 'full', maxPixels: 800_000, audio: 'frequency', load: () => import('./renderers/ink') },
-  { id: 'chladni', name: 'Chladni', placement: 'full', audio: 'both', load: () => import('./renderers/chladni') },
+  { id: 'chladni', name: 'Chladni', placement: 'full', audio: 'both', load: async () => { const module = await import('./renderers/chladni'); await module.prepareSimulation(); return module; } },
 ];
 export const defaultVisualizer = visualizers[0]!;
 export function resolveVisualizer(id: string): VisualizerDefinition {
