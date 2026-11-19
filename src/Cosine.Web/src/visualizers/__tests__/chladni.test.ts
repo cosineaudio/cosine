@@ -16,7 +16,7 @@ it('moves grains on attacks, preserves input, settles on pause, and respects red
   };
   const canvas = document.createElement('canvas');
   canvas.width = 800; canvas.height = 600;
-  vi.spyOn(canvas, 'getContext').mockReturnValue(ctx as unknown as CanvasRenderingContext2D);
+  vi.spyOn(canvas, 'getContext').mockImplementation(type => type === '2d' ? ctx as unknown as CanvasRenderingContext2D : null);
   const renderer = create(canvas, { sampleRate: 48000, fftSize: 2048 });
   renderer.setTrack?.('track');
   renderer.resize({ width: 800, height: 600, dpr: 1 });
@@ -63,7 +63,7 @@ it('repeats a track seed while varying patterns with track identity and frequenc
     };
     const canvas = document.createElement('canvas');
     canvas.width = 800; canvas.height = 600;
-    vi.spyOn(canvas, 'getContext').mockReturnValue(ctx as unknown as CanvasRenderingContext2D);
+    vi.spyOn(canvas, 'getContext').mockImplementation(type => type === '2d' ? ctx as unknown as CanvasRenderingContext2D : null);
     const renderer = create(canvas, { sampleRate: 48000, fftSize: 2048 });
     renderer.setTrack?.(track);
     const frequency = new Float32Array(1024).fill(-100);
@@ -87,7 +87,7 @@ it('restores a track starting shape after another track and leaves the current t
     rect: (x: number, y: number) => points.push(x, y) };
   const canvas = document.createElement('canvas');
   canvas.width = 800; canvas.height = 600;
-  vi.spyOn(canvas, 'getContext').mockReturnValue(ctx as unknown as CanvasRenderingContext2D);
+  vi.spyOn(canvas, 'getContext').mockImplementation(type => type === '2d' ? ctx as unknown as CanvasRenderingContext2D : null);
   const renderer = create(canvas, { sampleRate: 48000, fftSize: 2048 });
   const draw = () => {
     points.length = 0;
@@ -129,7 +129,7 @@ it('responds to a bass attack masked by steady midrange loudness', () => {
     };
     const canvas = document.createElement('canvas');
     canvas.width = 800; canvas.height = 600;
-    vi.spyOn(canvas, 'getContext').mockReturnValue(ctx as unknown as CanvasRenderingContext2D);
+    vi.spyOn(canvas, 'getContext').mockImplementation(type => type === '2d' ? ctx as unknown as CanvasRenderingContext2D : null);
     const renderer = create(canvas, { sampleRate: 48000, fftSize: 2048 });
     const tone = (bass: number) => Float32Array.from({ length: 2048 }, (_, i) =>
       0.3 * Math.sin(2 * Math.PI * 1000 * i / 48000) + bass * Math.sin(2 * Math.PI * 70 * i / 48000));
@@ -159,7 +159,7 @@ it('keeps grains in view during a minute of sustained audio and repeated bass hi
   };
   const canvas = document.createElement('canvas');
   canvas.width = 800; canvas.height = 600;
-  vi.spyOn(canvas, 'getContext').mockReturnValue(ctx as unknown as CanvasRenderingContext2D);
+  vi.spyOn(canvas, 'getContext').mockImplementation(type => type === '2d' ? ctx as unknown as CanvasRenderingContext2D : null);
   const renderer = create(canvas, { sampleRate: 48000, fftSize: 2048 });
   renderer.resize({ width: 800, height: 600, dpr: 1 });
   const tone = (level: number) => Float32Array.from({ length: 2048 }, (_, i) =>
@@ -181,7 +181,7 @@ it('expands on a kick and contracts on a snare-like attack', () => {
       rect: (x: number, y: number) => points.push(x, y) };
     const canvas = document.createElement('canvas');
     canvas.width = 800; canvas.height = 600;
-    vi.spyOn(canvas, 'getContext').mockReturnValue(ctx as unknown as CanvasRenderingContext2D);
+    vi.spyOn(canvas, 'getContext').mockImplementation(type => type === '2d' ? ctx as unknown as CanvasRenderingContext2D : null);
     const renderer = create(canvas, { sampleRate: 48000, fftSize: 2048 });
     const theme = { tint: '#336699', text: '#fff', muted: '#888' };
     renderer.draw(theme);
@@ -218,7 +218,7 @@ it('changes the spatial pattern during a sustained, unchanging frequency band', 
   };
   const canvas = document.createElement('canvas');
   canvas.width = 800; canvas.height = 600;
-  vi.spyOn(canvas, 'getContext').mockReturnValue(ctx as unknown as CanvasRenderingContext2D);
+  vi.spyOn(canvas, 'getContext').mockImplementation(type => type === '2d' ? ctx as unknown as CanvasRenderingContext2D : null);
   const renderer = create(canvas, { sampleRate: 48000, fftSize: 2048 });
   const frequency = new Float32Array(1024).fill(-100);
   frequency[Math.round(100 * 2048 / 48000)] = -20;
