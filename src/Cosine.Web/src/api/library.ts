@@ -1,7 +1,7 @@
 import { client } from './client';
-import { dtoToTrack } from './adapt';
-import type { Track } from './types';
-import type { TrackDto } from './model';
+import { dtoToArtist, dtoToTrack } from './adapt';
+import type { Artist, Track } from './types';
+import type { ArtistSummaryDto, TrackDto } from './model';
 
 /**
  * Library queries the OpenSubsonic spec has no call for. They live on cosine's own web API -
@@ -53,4 +53,21 @@ export async function getAutoPlayQueue(opts: AutoPlayOptions): Promise<Track[]> 
     autoPlayedTrackIds: opts.autoPlayedTrackIds ?? [],
   });
   return data.tracks.map(dtoToTrack);
+}
+
+/** Today in the listener's own timezone, so the mixes turn over at their midnight. */
+function localDay(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/**
+ * The artists behind the listener's home-page mixes: weighted toward what they play and star,
+ * topped up from the library, and the same all day.
+ */
+export async function getMixArtists(count = 5): Promise<Artist[]> {
+  const params = new URLSearchParams({ count: String(count), day: localDay() });
+  const data = await client.get<{ artists: ArtistSummaryDto[] }>(`api/me/mixes?${params}`);
+  return data.artists.map(dtoToArtist);
 }
