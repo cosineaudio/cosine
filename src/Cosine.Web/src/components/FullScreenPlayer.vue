@@ -423,6 +423,11 @@ function navTo(name: string, id?: string) {
                 </div>
               </div>
 
+              <!-- auto-play + steering, on its own row so the transport stays symmetric -->
+              <div class="mt-3 flex justify-center [filter:drop-shadow(0_1px_4px_rgb(0_0_0_/_0.6))]">
+                <AutoPlayControl size="lg" />
+              </div>
+
               <!-- transport (drop-shadow keeps icons legible over the visualizer) -->
               <div class="mt-4 flex items-center justify-center gap-6 [filter:drop-shadow(0_1px_4px_rgb(0_0_0_/_0.6))]">
                 <button
@@ -451,7 +456,6 @@ function navTo(name: string, id?: string) {
                   <Repeat1 v-if="player.repeatMode === 'one'" :size="20" :stroke-width="2" />
                   <Repeat v-else :size="20" :stroke-width="2" />
                 </button>
-                <AutoPlayControl size="lg" />
               </div>
 
               <!-- volume: mute (left), centered slider, visualizer picker (right) -->
@@ -522,6 +526,7 @@ function navTo(name: string, id?: string) {
                     :is-playing="player.isPlaying"
                     :is-past="i < player.queueIndex"
                     :is-auto-played="player.isAutoPlayTrack(t.id)"
+                    :vote="player.voteOf(t.id)"
                     :is-dragging="dragIndex === i"
                     :is-drop-target="overIndex === i && dragIndex !== null"
                     :navigate="navTo"

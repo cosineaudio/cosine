@@ -112,6 +112,8 @@ export const useRemotePlayerStore = defineStore('remotePlayer', () => {
   const stationDisliked = ref(0);
   /** The playing track's vote: 1 "+", -1 "−", 0 none. */
   const currentVote = ref<-1 | 0 | 1>(0);
+  /** Votes on queue entries, from the queue snapshot. */
+  const votes = ref<Map<string, -1 | 1>>(new Map());
 
   const isPlaying = computed(() => sessionState.value === 'Playing');
   const currentTrack = computed(() => queue.value[queueIndex.value] ?? null);
@@ -247,6 +249,9 @@ export const useRemotePlayerStore = defineStore('remotePlayer', () => {
     if (q.queueVersion < queueVersion.value) return;
     queue.value = q.items.map(api.queueItemToTrack);
     autoPlayIds.value = new Set(q.items.filter((i) => i.autoPlay).map((i) => i.trackId));
+    votes.value = new Map(q.items
+      .filter((i) => i.vote)
+      .map((i) => [i.trackId, (i.vote! > 0 ? 1 : -1) as -1 | 1]));
     queueVersion.value = q.queueVersion;
   }
 
@@ -422,6 +427,7 @@ export const useRemotePlayerStore = defineStore('remotePlayer', () => {
     stationLiked.value = 0;
     stationDisliked.value = 0;
     currentVote.value = 0;
+    votes.value = new Map();
     inFlight.value = 0;
     positionHoldUntil = 0;
   }
@@ -582,9 +588,17 @@ export const useRemotePlayerStore = defineStore('remotePlayer', () => {
     return autoPlayIds.value.has(trackId);
   }
 
+  function voteOf(trackId: string): -1 | 0 | 1 {
+    return votes.value.get(trackId) ?? 0;
+  }
+
   /** "+" / "−" / clear for a track. The session replaces its auto-play entries, and skips on "−". */
   function vote(trackId: string, value: -1 | 0 | 1): void {
     if (trackId === currentTrackId.value) currentVote.value = value;
+    const next = new Map(votes.value);
+    if (value === 0) next.delete(trackId);
+    else next.set(trackId, value);
+    votes.value = next;
     send((id) => api.vote(id, trackId, value));
   }
 
@@ -685,6 +699,7 @@ export const useRemotePlayerStore = defineStore('remotePlayer', () => {
     stationLiked,
     stationDisliked,
     currentVote,
+    voteOf,
     vote,
     setStation,
     getStation,

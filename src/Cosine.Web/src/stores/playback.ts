@@ -145,6 +145,10 @@ export const usePlaybackStore = defineStore('playback', () => {
   const stationDisliked = computed(() =>
     (remote.isActive ? remote.stationDisliked : autoPlay.dislikedCount));
 
+  /** Any queue entry's vote, for the queue view. */
+  const voteOf = (trackId: string): -1 | 0 | 1 =>
+    (remote.isActive ? remote.voteOf(trackId) : autoPlay.voteOf(trackId));
+
   /** Vote on the playing track. Pressing the lit button again clears the vote. */
   function steer(value: -1 | 1): void {
     const id = currentTrackId.value;
@@ -398,6 +402,7 @@ export const usePlaybackStore = defineStore('playback', () => {
     stationLiked,
     stationDisliked,
     steer,
+    voteOf,
     undoDoesNotFit,
     resetVotes,
     startStation,

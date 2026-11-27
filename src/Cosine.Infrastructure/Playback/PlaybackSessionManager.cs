@@ -694,6 +694,7 @@ public sealed class PlaybackSessionManager : IPlaybackSessionManager, IAsyncDisp
             s.Disliked.Remove(trackId);
             if (vote > 0) s.Liked.Add(trackId);
             else if (vote < 0) s.Disliked.Add(trackId);
+            s.VoteVersion++;
 
             if (!s.AutoPlay || vote >= 0) return;
 
@@ -1091,11 +1092,15 @@ public sealed class PlaybackSessionManager : IPlaybackSessionManager, IAsyncDisp
         try
         {
             var beforeVersion = session.Queue.Version;
+            var beforeVotes = session.VoteVersion;
             await using var scope = _scopes.CreateAsyncScope();
             await action(session, scope.ServiceProvider, ct);
 
             var snapshot = session.Snapshot(_time.GetUtcNow());
-            if (session.Queue.Version != beforeVersion) await PublishQueueAsync(session, ct);
+            // A vote changes how entries are drawn without moving the queue, so it is published
+            // as a queue update at the same version.
+            if (session.Queue.Version != beforeVersion || session.VoteVersion != beforeVotes)
+                await PublishQueueAsync(session, ct);
             await PublishStateAsync(session, snapshot, ct);
             await PersistAsync(session, force: true, ct);
             return snapshot;
@@ -1485,6 +1490,9 @@ public sealed class PlaybackSessionManager : IPlaybackSessionManager, IAsyncDisp
         /// </summary>
         public List<Guid> Anchor { get; } = [];
 
+        /// <summary>Bumped on every vote, so the queue (which shows them) is republished.</summary>
+        public int VoteVersion { get; set; }
+
         /// <summary>Tracks voted "+" on this station.</summary>
         public HashSet<Guid> Liked { get; } = [];
 
@@ -1496,6 +1504,7 @@ public sealed class PlaybackSessionManager : IPlaybackSessionManager, IAsyncDisp
             Anchor.Clear();
             Liked.Clear();
             Disliked.Clear();
+            VoteVersion++;
             AddToAnchor(anchor);
         }
 
@@ -1610,11 +1619,12 @@ public sealed class PlaybackSessionManager : IPlaybackSessionManager, IAsyncDisp
             {
                 var trackId = Queue.Tracks[i];
                 var auto = AutoPlayed.Contains(trackId);
+                var vote = Liked.Contains(trackId) ? 1 : Disliked.Contains(trackId) ? -1 : 0;
                 items.Add(Meta.TryGetValue(trackId, out var meta)
-                    ? meta with { Position = i, AutoPlay = auto }
+                    ? meta with { Position = i, AutoPlay = auto, Vote = vote }
                     : new PlaybackQueueItem(
                         i, trackId, string.Empty, string.Empty, Guid.Empty,
-                        string.Empty, Guid.Empty, 0, null, null, auto));
+                        string.Empty, Guid.Empty, 0, null, null, auto, Vote: vote));
             }
 
             return new PlaybackQueueSnapshot(Id, Queue.Version, items);

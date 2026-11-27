@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { GripVertical, Trash2, Play, MoreHorizontal, Infinity as InfinityIcon } from 'lucide-vue-next';
+import { GripVertical, Trash2, Play, MoreHorizontal, Minus, Plus, Infinity as InfinityIcon } from 'lucide-vue-next';
 import type { Track } from '@/api/types';
 import CoverArt from '@/components/CoverArt.vue';
 import ArtistCredit from '@/components/ArtistCredit.vue';
@@ -32,6 +32,8 @@ const props = withDefaults(
     isPast?: boolean;
     /** Queued by auto-play rather than by the listener. */
     isAutoPlayed?: boolean;
+    /** The station vote on this track: 1 "fits", -1 "doesn't fit", 0 none. */
+    vote?: -1 | 0 | 1;
     /** This row is the one being dragged. */
     isDragging?: boolean;
     /** A drop would land on this row. */
@@ -44,6 +46,7 @@ const props = withDefaults(
     isPlaying: false,
     isPast: false,
     isAutoPlayed: false,
+    vote: 0,
     isDragging: false,
     isDropTarget: false,
     navigate: undefined,
@@ -101,6 +104,21 @@ defineOptions({ inheritAttrs: false });
       <span v-if="isCurrent" class="absolute inset-0 grid place-items-center bg-black/50">
         <NowPlayingBars v-if="isPlaying" class="text-accent" />
         <Play v-else :size="14" :stroke-width="2" fill="currentColor" class="translate-x-px text-accent" />
+      </span>
+      <!-- station votes; the playing track shows its own in the auto-play pill instead -->
+      <span
+        v-else-if="vote === -1"
+        class="absolute inset-0 grid place-items-center bg-black/65 text-white"
+        aria-label="Voted doesn't fit"
+      >
+        <Minus :size="16" :stroke-width="3" />
+      </span>
+      <span
+        v-else-if="vote === 1"
+        class="absolute inset-0 grid place-items-center bg-white/30 text-white [filter:drop-shadow(0_1px_2px_rgb(0_0_0_/_0.6))]"
+        aria-label="Voted fits"
+      >
+        <Plus :size="16" :stroke-width="3" />
       </span>
     </button>
     <!-- Not one button around both lines: the artist names are their own links,

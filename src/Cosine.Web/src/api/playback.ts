@@ -103,6 +103,8 @@ export interface PlaybackQueueItem {
   bitRate: number | null;
   /** True for an entry the session queued itself, so the queue panel can mark it. */
   autoPlay: boolean;
+  /** The station vote on this entry: 1 "+", -1 "−", 0 none. */
+  vote?: number;
 }
 
 export interface PlaybackQueueSnapshot {

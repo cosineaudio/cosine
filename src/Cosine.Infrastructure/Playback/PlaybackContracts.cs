@@ -160,7 +160,8 @@ public record PlaybackQueueItem(
     string? Suffix,
     int? BitRate,
     bool AutoPlay = false,
-    IReadOnlyList<PlaybackQueueArtist>? Artists = null);
+    IReadOnlyList<PlaybackQueueArtist>? Artists = null,
+    int Vote = 0);
 
 /// <summary>One credited artist on a queue entry - enough to render a link and nothing more.</summary>
 public record PlaybackQueueArtist(Guid Id, string Name);
