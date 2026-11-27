@@ -3,6 +3,9 @@ import vue from '@vitejs/plugin-vue'
 import tailwindcss from '@tailwindcss/vite'
 import { fileURLToPath, URL } from 'node:url'
 
+// Use the Docker API for frontend-only development, or the native API by default.
+const apiTarget = process.env.COSINE_API_URL || 'http://localhost:5222'
+
 export default defineConfig({
   plugins: [
     vue(),
@@ -16,24 +19,24 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:5222',
+        target: apiTarget,
         changeOrigin: true,
       },
       '/playback': {
-        target: 'http://localhost:5222',
+        target: apiTarget,
         changeOrigin: true,
       },
       '/auth': {
-        target: 'http://localhost:5222',
+        target: apiTarget,
         changeOrigin: false,
       },
       '/hubs': {
-        target: 'http://localhost:5222',
+        target: apiTarget,
         changeOrigin: true,
         ws: true,
       },
       '/health': {
-        target: 'http://localhost:5222',
+        target: apiTarget,
         changeOrigin: true,
       },
     },

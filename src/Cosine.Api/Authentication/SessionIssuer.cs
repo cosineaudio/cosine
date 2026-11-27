@@ -16,7 +16,17 @@ public class SessionIssuer(IOptions<JwtOptions> jwt, IOptions<AuthOptions> auth)
     public void Issue(HttpContext context, Core.Entities.User user, string method) =>
         SetJwtCookie(context, GenerateJwt(user, method));
 
-    public string GenerateJwt(Core.Entities.User user, string method)
+    public string GenerateJwt(Core.Entities.User user, string method) =>
+        GenerateJwt(user, method, DateTime.UtcNow.AddMinutes(_jwtOptions.ExpirationMinutes));
+
+    /// <summary>A bearer access token for a native client, with its expiry.</summary>
+    public (string Token, DateTimeOffset ExpiresAt) GenerateDeviceAccessToken(Core.Entities.User user)
+    {
+        var expires = DateTime.UtcNow.AddMinutes(_jwtOptions.DeviceAccessTokenMinutes);
+        return (GenerateJwt(user, "device", expires), new DateTimeOffset(expires, TimeSpan.Zero));
+    }
+
+    private string GenerateJwt(Core.Entities.User user, string method, DateTime expires)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtOptions.SigningKey));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -36,7 +46,7 @@ public class SessionIssuer(IOptions<JwtOptions> jwt, IOptions<AuthOptions> auth)
             issuer: _jwtOptions.Issuer,
             audience: _jwtOptions.Audience,
             claims: claims,
-            expires: DateTime.UtcNow.AddMinutes(_jwtOptions.ExpirationMinutes),
+            expires: expires,
             signingCredentials: credentials);
 
         return new JwtSecurityTokenHandler().WriteToken(token);

@@ -5,7 +5,7 @@ import {
   DialogRoot, DialogPortal, DialogOverlay, DialogContent, DialogTitle, DialogDescription,
 } from 'reka-ui';
 import {
-  AudioLines, Headphones, ListMusic, Mic2, Music2, Pause, Plus, Search, Users,
+  Headphones, ListMusic, Mic2, Music2, Pause, Plus, Search, Users,
   Volume2, VolumeX,
 } from 'lucide-vue-next';
 import { toast } from 'vue-sonner';
@@ -17,6 +17,8 @@ import type { StructuredLyrics } from '@/api/lyrics';
 import Spinner from '@/components/ui/Spinner.vue';
 import NowPlayingBars from '@/components/ui/NowPlayingBars.vue';
 import Visualizer from '@/components/Visualizer.vue';
+import VisualizerPicker from '@/components/VisualizerPicker.vue';
+import { useVisualizer } from '@/composables/useVisualizer';
 import { useDominantColorFromUrl } from '@/composables/useDominantColor';
 import { formatDuration } from '@/lib/format';
 import { scrollCentre } from '@/lib/scrollCentre';
@@ -120,14 +122,7 @@ function acceptListenPrompt() {
   listenPromptOpen.value = false;
 }
 
-// Ambient visualizer on/off - same persisted preference the full-screen player keeps.
-const VISUALIZER_KEY = 'cosine_visualizer_on';
-const visualizerOn = ref((() => {
-  try { return localStorage.getItem(VISUALIZER_KEY) !== '0'; } catch { return true; }
-})());
-watch(visualizerOn, (on) => {
-  try { localStorage.setItem(VISUALIZER_KEY, on ? '1' : '0'); } catch { /* ignore */ }
-});
+const { selection: visualizerSelection, enabled: visualizerOn, placement: visualizerPlacement } = useVisualizer();
 
 // ---- search (Add songs tab) ----
 const query = ref('');
@@ -402,13 +397,16 @@ onUnmounted(() => {
       <!-- ambient visualizer: the guest's own analyser tap, only while listening along -->
       <div
         v-if="guest.listening && visualizerOn"
-        class="pointer-events-none absolute inset-x-0 bottom-0 z-0 h-[45%] opacity-60"
-        :style="{
+        class="pointer-events-none absolute inset-x-0 bottom-0 z-0 opacity-60"
+        :class="visualizerPlacement === 'floor' ? 'h-[45%]' : 'top-0'"
+        :style="visualizerPlacement === 'floor' ? {
           maskImage: 'linear-gradient(to top, black 30%, transparent)',
           WebkitMaskImage: 'linear-gradient(to top, black 30%, transparent)',
-        }"
+        } : undefined"
       >
         <Visualizer
+          :track-id="guest.state?.trackId"
+          :visualizer="visualizerSelection"
           :tint="tint"
           :active="guest.listening"
           :analyser="guest.ensureAnalyser"
@@ -518,7 +516,7 @@ onUnmounted(() => {
                 </div>
               </div>
 
-              <!-- volume: mute (left), centered slider, visualizer toggle (right) - the
+              <!-- volume: mute (left), centered slider, visualizer picker (right) - the
                    full-screen player's row, for the guest's own ears -->
               <div
                 v-if="guest.listening"
@@ -540,16 +538,7 @@ onUnmounted(() => {
                   class="volume-slider h-1 w-40 cursor-pointer appearance-none rounded-full bg-surface-2"
                   @input="guest.setVolume(parseFloat(($event.target as HTMLInputElement).value))"
                 />
-                <button
-                  type="button"
-                  class="justify-self-end transition-colors"
-                  :class="visualizerOn ? 'text-accent' : 'text-muted hover:text-text'"
-                  :aria-pressed="visualizerOn"
-                  aria-label="Toggle visualizer"
-                  @click="visualizerOn = !visualizerOn"
-                >
-                  <AudioLines :size="18" :stroke-width="2" />
-                </button>
+                <VisualizerPicker v-model="visualizerSelection" />
               </div>
             </div>
           </div>
