@@ -147,6 +147,7 @@ builder.Services.AddScoped<ISearchService, SearchService>();
 builder.Services.AddScoped<IPlaylistService, PlaylistService>();
 builder.Services.AddScoped<IAudioSimilarityService, AudioSimilarityService>();
 builder.Services.AddScoped<ISimilarityService, SimilarityService>();
+builder.Services.AddScoped<IMixService, MixService>();
 builder.Services.AddScoped<IStarService, StarService>();
 builder.Services.AddScoped<IRatingService, RatingService>();
 builder.Services.AddScoped<IBookmarkService, BookmarkService>();

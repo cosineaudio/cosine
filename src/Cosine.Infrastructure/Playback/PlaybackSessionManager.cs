@@ -48,9 +48,9 @@ public sealed class PlaybackSessionManager : IPlaybackSessionManager, IAsyncDisp
     /// </summary>
     private const int AutoPlayRefillThreshold = 3;
 
-    /// <summary>How many tracks one top-up adds. Small enough to keep following what is being
-    /// played rather than committing an hour ahead to whatever was on at the time.</summary>
-    private const int AutoPlayBatchSize = 20;
+    /// <summary>How many tracks one top-up adds. Small, so a "+" or "−" is heard within a few
+    /// tracks rather than after a long stretch fetched before the vote.</summary>
+    private const int AutoPlayBatchSize = 8;
 
     /// <summary>
     /// How many played entries stay in the queue behind the current one. An auto-playing session
@@ -678,10 +678,14 @@ public sealed class PlaybackSessionManager : IPlaybackSessionManager, IAsyncDisp
             s.Liked.UnionWith(station.Liked);
             s.Disliked.UnionWith(station.Disliked);
             s.Liked.ExceptWith(s.Disliked);
-            // Whatever auto-play queued before it knew this was guessing; guess again.
-            await RefreshAutoPlayAsync(s, sp, c);
+            await MaybeAutoPlayAsync(s, sp, c);
         }, ct);
 
+    /// <summary>
+    /// Steering, not a rebuild: nothing already queued is replaced, the vote changes what the
+    /// next batches are built from. "−" also skips the track when it is the one playing, and drops
+    /// the upcoming auto-play entries by the same artist.
+    /// </summary>
     public Task<PlaybackStateSnapshot> VoteAsync(
         Guid sessionId, PlaybackCaller caller, Guid trackId, int vote, CancellationToken ct) =>
         MutateAsync(sessionId, caller, async (s, sp, c) =>
@@ -691,28 +695,31 @@ public sealed class PlaybackSessionManager : IPlaybackSessionManager, IAsyncDisp
             if (vote > 0) s.Liked.Add(trackId);
             else if (vote < 0) s.Disliked.Add(trackId);
 
-            if (!s.AutoPlay) return;
-            await RefreshAutoPlayAsync(s, sp, c);
+            if (!s.AutoPlay || vote >= 0) return;
 
-            // "Doesn't fit" on what is playing is also "skip it" - by now the next track is
-            // already one chosen with the vote in mind.
-            if (vote < 0 && s.Queue.CurrentTrackId == trackId)
-            {
-                await MaybeAutoPlayAsync(s, sp, c);
-                await ApplyAsync(s, s.Queue.Next(), sp, c);
-            }
+            if (s.Meta.TryGetValue(trackId, out var meta))
+                await DropUpcomingByAsync(s, meta.ArtistId, sp, c);
+
+            if (s.Queue.CurrentTrackId != trackId) return;
+            // Skip first, top up after: the device moves on without waiting on the similarity
+            // query. Only with nothing queued after it does the skip wait for a batch.
+            var nothingNext = s.Queue.Index >= s.Queue.Count - 1;
+            if (nothingNext) await MaybeAutoPlayAsync(s, sp, c);
+            await ApplyAsync(s, s.Queue.Next(), sp, c);
+            if (!nothingNext) await MaybeAutoPlayAsync(s, sp, c);
+            SchedulePreload(s);
         }, ct);
 
     // ---- Auto-play ----
 
     /// <summary>
-    /// Drop what auto-play queued but has not played yet, and fetch afresh. Anything the listener
-    /// queued themselves stays exactly where it is.
+    /// Upcoming auto-play entries by <paramref name="artistId"/>, other than the one playing. By
+    /// "not played" rather than by position: under shuffle the entries after the index are not
+    /// the ones still to come. Anything the listener queued themselves stays.
     /// </summary>
-    private async Task RefreshAutoPlayAsync(LiveSession session, IServiceProvider sp, CancellationToken ct)
+    private async Task DropUpcomingByAsync(
+        LiveSession session, Guid artistId, IServiceProvider sp, CancellationToken ct)
     {
-        // By "not played yet" rather than by position: under shuffle the entries after the index
-        // are not the ones still to come.
         var tracks = session.Queue.Tracks;
         var played = session.Played.ToHashSet();
         for (var i = tracks.Count - 1; i >= 0; i--)
@@ -720,12 +727,10 @@ public sealed class PlaybackSessionManager : IPlaybackSessionManager, IAsyncDisp
             if (i == session.Queue.Index) continue;
             var id = tracks[i];
             if (!session.AutoPlayed.Contains(id) || played.Contains(id)) continue;
+            if (!session.Meta.TryGetValue(id, out var meta) || meta.ArtistId != artistId) continue;
             await ApplyAsync(session, session.Queue.Remove(i), sp, ct);
             session.AutoPlayed.Remove(id);
         }
-
-        SchedulePreload(session);
-        await MaybeAutoPlayAsync(session, sp, ct);
     }
 
     /// <summary>

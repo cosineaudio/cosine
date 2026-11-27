@@ -58,8 +58,11 @@ const ANCHOR_LIMIT = 500;
  */
 const REFILL_THRESHOLD = 3;
 
-/** How many tracks one top-up asks for. */
-const BATCH_SIZE = 20;
+/**
+ * How many tracks one top-up asks for. Small, so a "+" or "−" is heard within a few tracks
+ * rather than after a long stretch fetched before the vote.
+ */
+const BATCH_SIZE = 8;
 
 /** How many recently played tracks are offered as seeds. Their artists are what actually seed it. */
 const SEED_COUNT = 8;
@@ -119,8 +122,8 @@ export const useAutoPlayStore = defineStore('autoPlay', () => {
   const disliked = ref<Set<string>>(new Set(savedStation.disliked));
 
   /**
-   * Bumped whenever what is queued stops matching the station - a vote, a new station. A batch
-   * that was in flight across a bump was asked for the old station and is thrown away.
+   * Bumped when a new station starts. A batch that was in flight across a bump was asked for the
+   * old station and is thrown away, and a fresh one fetched.
    */
   let generation = 0;
 
@@ -172,7 +175,6 @@ export const useAutoPlayStore = defineStore('autoPlay', () => {
     anchor.value = capAnchor(next.anchor);
     liked.value = new Set(next.liked);
     disliked.value = new Set(next.disliked.filter((id) => !next.liked.includes(id)));
-    void refresh();
   }
 
   /** 1 "+", -1 "−", 0 neither. */
@@ -188,9 +190,10 @@ export const useAutoPlayStore = defineStore('autoPlay', () => {
   const dislikedCount = computed(() => disliked.value.size);
 
   /**
-   * "+" / "−" / clear for a track. What auto-play had queued but not yet played was chosen
-   * without this vote, so it is replaced; "−" on the playing track also skips it once the
-   * replacement is in, so the next thing heard is already steered.
+   * "+" / "−" / clear for a track. Steering, not a rebuild: nothing already queued is replaced,
+   * the vote changes what the next batches are built from. Batches are small enough that this
+   * is heard within a few tracks. "−" also skips the track when it is the one playing, and drops
+   * the upcoming auto-play entries by the same artist - those plainly do not fit either.
    */
   async function vote(trackId: string, value: -1 | 0 | 1): Promise<void> {
     const nextLiked = new Set(liked.value);
@@ -202,34 +205,31 @@ export const useAutoPlayStore = defineStore('autoPlay', () => {
     liked.value = nextLiked;
     disliked.value = nextDisliked;
 
-    if (!enabled.value || remote.isActive) return;
-    await refresh();
-    if (value < 0 && player.currentTrackId === trackId) player.next();
+    if (!enabled.value || remote.isActive || value >= 0) return;
+
+    const rejected = player.queue.find((t) => t.id === trackId);
+    if (rejected?.artistId) dropUpcomingBy(rejected.artistId);
+
+    if (player.currentTrackId !== trackId) return;
+    // Nothing queued after it: the skip has to wait for a batch, which already knows the vote.
+    if (remaining.value === 0) {
+      // The once-per-track guard is for the watcher; this is a new reason to ask.
+      lastAttemptTrackId = null;
+      await maybeTopUp();
+    }
+    if (remaining.value > 0) player.next();
   }
 
-  /**
-   * Drop what auto-play queued and has not played, and fetch afresh. Matched by "not heard yet"
-   * rather than by position, because under shuffle the entries after the index are not the ones
-   * still to come. Anything the listener queued stays exactly where it is.
-   */
-  async function refresh(): Promise<void> {
-    generation++;
-    if (remote.isActive) return;
-
+  /** Upcoming auto-play entries by `artistId`, minus the one playing. The listener's own stay. */
+  function dropUpcomingBy(artistId: string): void {
     const heard = new Set(getRecentTracks().map((t) => t.id));
     for (let i = player.queue.length - 1; i >= 0; i--) {
       if (i === player.queueIndex) continue;
-      const id = player.queue[i]?.id;
-      if (!id || !addedIds.value.has(id) || heard.has(id)) continue;
+      const t = player.queue[i];
+      if (!t || t.artistId !== artistId || !addedIds.value.has(t.id) || heard.has(t.id)) continue;
       player.removeFromQueue(i);
-      addedIds.value.delete(id);
+      addedIds.value.delete(t.id);
     }
-
-    // Steering is the listener taking over from wherever the queue came from.
-    source.value = null;
-    lastAttemptTrackId = null;
-    loading.value = false;
-    await maybeTopUp();
   }
 
   function loadEnabled(): boolean {
@@ -306,7 +306,7 @@ export const useAutoPlayStore = defineStore('autoPlay', () => {
     const asked = generation;
     try {
       const tracks = (await fetchBatch()).filter((t) => !disliked.value.has(t.id));
-      // Asked for a station that has since been steered; the refresh that bumped it fetches anew.
+      // Asked for a station that has since been replaced; fetch again for the new one below.
       if (asked !== generation) return;
       if (tracks.length === 0) {
         error.value = 'Auto-play could not find anything else to play';
@@ -326,7 +326,11 @@ export const useAutoPlayStore = defineStore('autoPlay', () => {
     } catch {
       if (asked === generation) error.value = 'Auto-play could not reach the server';
     } finally {
-      if (asked === generation) loading.value = false;
+      loading.value = false;
+      if (asked !== generation) {
+        lastAttemptTrackId = null;
+        void maybeTopUp();
+      }
     }
   }
 

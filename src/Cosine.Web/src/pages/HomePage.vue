@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, type Ref } from 'vue';
-import { Sparkles, Radio } from 'lucide-vue-next';
-import { getAlbumList2, getRandomSongs, getStarred2 } from '@/api/lists';
+import { Radio } from 'lucide-vue-next';
+import { getAlbumList2, getStarred2 } from '@/api/lists';
+import { getMixArtists } from '@/api/library';
 import { getPlaylists, getPlaylist, isSystemPlaylist } from '@/api/playlists';
 import { useAuthStore } from '@/stores/auth';
 import { useFavoritesStore } from '@/stores/favorites';
@@ -10,11 +11,12 @@ import { useDeferredLoading } from '@/composables/useDeferredLoading';
 import SectionHeader from '@/components/ui/SectionHeader.vue';
 import Shelf from '@/components/ui/Shelf.vue';
 import AlbumCard from '@/components/AlbumCard.vue';
+import MixCard from '@/components/MixCard.vue';
 import TrackRow from '@/components/TrackRow.vue';
 import Skeleton from '@/components/ui/Skeleton.vue';
 import SkeletonShelf from '@/components/ui/SkeletonShelf.vue';
 import SkeletonTrackList from '@/components/ui/SkeletonTrackList.vue';
-import type { Album, Track } from '@/api/types';
+import type { Album, Artist, Track } from '@/api/types';
 
 const auth = useAuthStore();
 const favorites = useFavoritesStore();
@@ -60,7 +62,7 @@ function useSection<T>(initial: T, load: () => Promise<T>): Section<T> & { run: 
 
 const releaseRadarId = ref<string | null>(null);
 
-const discovery = useSection<Track[]>([], () => getRandomSongs({ size: 12 }));
+const mixes = useSection<Artist[]>([], () => getMixArtists(5));
 const newest = useSection<Album[]>([], () => getAlbumList2('newest', { size: 18 }));
 const recent = useSection<Album[]>([], () => getAlbumList2('recent', { size: 18 }));
 const frequent = useSection<Album[]>([], () => getAlbumList2('frequent', { size: 18 }));
@@ -81,7 +83,7 @@ const releaseRadar = useSection<Track[]>([], async () => {
   return (await getPlaylist(radar.id)).entry;
 });
 
-const sections = [discovery, releaseRadar, newest, recent, frequent, favTracks, random];
+const sections = [mixes, releaseRadar, newest, recent, frequent, favTracks, random];
 
 /** The library-is-empty message can only be honest once the album shelves have answered. */
 const libraryEmpty = computed(
@@ -105,10 +107,6 @@ onMounted(() => {
   sections.forEach((s) => void s.run());
 });
 
-function playDiscovery() {
-  playTracks(discovery.data, 0);
-}
-
 function playReleaseRadar() {
   playTracks(releaseRadar.data, 0);
 }
@@ -128,50 +126,15 @@ function playReleaseRadar() {
     </div>
 
     <div class="space-y-12">
-      <!-- Random discovery -->
-      <div v-if="discovery.pending">
-        <div class="mb-4 flex items-center" :style="{ height: 'calc(var(--text-title) * 1.1)' }">
-          <Skeleton class="h-5 w-32" />
-        </div>
-        <div class="rounded-control border border-border bg-surface p-4 sm:p-5">
-          <div class="mb-4 flex items-center gap-3">
-            <Skeleton class="h-11 w-11" rounded="full" />
-            <div class="flex flex-col gap-2">
-              <Skeleton class="h-5 w-36" />
-              <Skeleton class="h-3.5 w-52" />
-            </div>
+      <!-- Your mixes: one auto-play station per artist -->
+      <SkeletonShelf v-if="mixes.pending" />
+      <section v-else-if="mixes.data.length" class="reveal">
+        <SectionHeader title="Your mixes" />
+        <Shelf>
+          <div v-for="artist in mixes.data" :key="artist.id" class="w-44 shrink-0 snap-start sm:w-48">
+            <MixCard :artist="artist" />
           </div>
-          <SkeletonTrackList :count="12" show-art :columns="2" />
-        </div>
-      </div>
-      <section v-else-if="discovery.data.length" class="reveal">
-        <SectionHeader title="Discover" />
-        <div class="rounded-control border border-border bg-surface p-4 sm:p-5">
-          <div class="mb-4 flex items-center gap-3">
-            <button
-              type="button"
-              class="grid h-11 w-11 place-items-center rounded-full bg-accent text-accent-ink transition-transform hover:scale-105 active:scale-95"
-              aria-label="Play discovery mix"
-              @click="playDiscovery"
-            >
-              <Sparkles :size="20" :stroke-width="2" />
-            </button>
-            <div>
-              <div class="font-display text-title font-semibold tracking-tight text-text">Random mix</div>
-              <div class="text-sm text-muted">A fresh handful from your library</div>
-            </div>
-          </div>
-          <div class="grid gap-0.5 sm:grid-cols-2">
-            <TrackRow
-              v-for="(track, i) in discovery.data"
-              :key="track.id"
-              :track="track"
-              :queue="discovery.data"
-              :index="i + 1"
-              show-art
-            />
-          </div>
-        </div>
+        </Shelf>
       </section>
 
       <!-- Release Radar -->

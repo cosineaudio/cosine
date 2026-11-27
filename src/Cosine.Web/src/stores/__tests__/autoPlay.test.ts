@@ -270,23 +270,23 @@ describe('autoPlay store', () => {
       auto.setEnabled(true);
       await settle();
 
-      expect(genreMock).toHaveBeenCalledWith('Doom', { count: 20, offset: 200 });
+      expect(genreMock).toHaveBeenCalledWith('Doom', { count: 8, offset: 200 });
       expect(autoPlayMock).not.toHaveBeenCalled();
       expect(player.queue.map((t) => t.id)).toContain('g0');
     });
 
     it('carries the cursor on rather than re-reading the same rows', async () => {
       const { player, auto } = playingAGenre();
-      genreMock.mockResolvedValue(queueOf(20, 'g'));
+      genreMock.mockResolvedValue(queueOf(8, 'g'));
 
       auto.setEnabled(true);
       await settle();
 
       // Near the end of what that page added, so the next top-up is due.
-      player.playAt(18);
+      player.playAt(8);
       await settle();
 
-      expect(genreMock).toHaveBeenLastCalledWith('Doom', { count: 20, offset: 220 });
+      expect(genreMock).toHaveBeenLastCalledWith('Doom', { count: 8, offset: 208 });
     });
 
     // The genre is finite; endless play is not. A short page is the end of it.
@@ -339,7 +339,7 @@ describe('autoPlay store', () => {
       expect(autoPlayMock).not.toHaveBeenCalled();
       expect(player.queue.map((t) => t.id)).toContain('c0');
       // One batch, not the whole catalogue.
-      expect(player.queue).toHaveLength(22);
+      expect(player.queue).toHaveLength(10);
     });
 
     // The catalogue is one request for everything the artist has; re-reading it every batch is
@@ -351,11 +351,11 @@ describe('autoPlay store', () => {
       auto.setEnabled(true);
       await settle();
 
-      player.playAt(18);
+      player.playAt(8);
       await settle();
 
       expect(artistSongsMock).toHaveBeenCalledOnce();
-      expect(player.queue.map((t) => t.id)).toContain('c20');
+      expect(player.queue.map((t) => t.id)).toContain('c8');
     });
 
     // Top songs are ranked by play count, so the catalogue holds them too - appending them again
@@ -432,42 +432,58 @@ describe('autoPlay store', () => {
       expect(sent.anchorTrackIds).toEqual(['p0', 'p1', 'p2', 't0', 't1']);
     });
 
-    it('"+" replaces what auto-play had queued, keeping the listener\'s own tracks', async () => {
+    it('"+" steers the next batch without touching what is queued', async () => {
       const player = usePlayerStore();
       const auto = useAutoPlayStore();
       player.play(track('t0'), queueOf(2));
       auto.setEnabled(true);
       await settle();
-      expect(player.queue.map((t) => t.id)).toEqual(['t0', 't1', 'r1', 'r2']);
+      const before = player.queue.map((t) => t.id);
 
-      autoPlayMock.mockResolvedValue([track('s1'), track('s2')]);
       await auto.vote('t0', 1);
       await settle();
 
-      expect(player.queue.map((t) => t.id)).toEqual(['t0', 't1', 's1', 's2']);
+      expect(player.queue.map((t) => t.id)).toEqual(before);
       expect(auto.currentVote).toBe(1);
-      const sent = autoPlayMock.mock.calls.at(-1)![0] as { likedTrackIds: string[] };
-      expect(sent.likedTrackIds).toEqual(['t0']);
+      expect(autoPlayMock).toHaveBeenCalledOnce();
     });
 
-    it('"−" on the playing track skips it, and the replacement is already steered', async () => {
+    it('"−" skips at once and drops only the upcoming auto-play tracks by that artist', async () => {
+      const player = usePlayerStore();
+      const auto = useAutoPlayStore();
+      const by = (id: string, artistId: string): Track => ({ ...track(id), artistId });
+      player.play(by('t0', 'a'), [by('t0', 'a'), by('mine', 'a')]);
+      autoPlayMock.mockResolvedValue([by('r1', 'b'), by('r2', 'a'), by('r3', 'c')]);
+      auto.setEnabled(true);
+      await settle();
+
+      await auto.vote('t0', -1);
+      await settle();
+
+      // The listener's own track by the same artist stays; auto-play's goes.
+      expect(player.queue.map((t) => t.id).slice(0, 4)).toEqual(['t0', 'mine', 'r1', 'r3']);
+      expect(player.currentTrack!.id).toBe('mine');
+    });
+
+    it('"−" with nothing queued after it waits for a batch that already knows the vote', async () => {
       const player = usePlayerStore();
       const auto = useAutoPlayStore();
       player.play(track('t0'), [track('t0')]);
       auto.setEnabled(true);
       await settle();
+      autoPlayMock.mockResolvedValue([]);
+      player.playAt(2);
+      await settle();
+      expect(player.currentTrack!.id).toBe('r2');
+      expect(player.queue).toHaveLength(3);
 
-      autoPlayMock.mockResolvedValue([track('s1'), track('s2')]);
-      await auto.vote('t0', -1);
+      autoPlayMock.mockResolvedValue([track('s1')]);
+      await auto.vote('r2', -1);
       await settle();
 
       expect(player.currentTrack!.id).toBe('s1');
-      expect(player.queue.map((t) => t.id)).not.toContain('r1');
-      const sent = autoPlayMock.mock.calls.at(-1)![0] as {
-        dislikedTrackIds: string[]; excludeTrackIds: string[];
-      };
-      expect(sent.dislikedTrackIds).toEqual(['t0']);
-      expect(sent.excludeTrackIds).toContain('t0');
+      const sent = autoPlayMock.mock.calls.at(-1)![0] as { dislikedTrackIds: string[] };
+      expect(sent.dislikedTrackIds).toEqual(['r2']);
     });
 
     it('never queues a disliked track, whatever the server sends', async () => {
