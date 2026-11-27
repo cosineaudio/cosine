@@ -69,7 +69,7 @@ public class TracksController(
         return await ToResponseAsync(tracks, ct);
     }
 
-    /// <summary>How many seed tracks are read. Only the first few distinct artists are used.</summary>
+    /// <summary>How many recent plays are read. The station weighting uses fewer still.</summary>
     private const int MaxAutoPlaySeeds = 10;
 
     /// <summary>
@@ -79,13 +79,24 @@ public class TracksController(
     /// </summary>
     private const int MaxAutoPlayExclusions = 1000;
 
+    /// <summary>Ceiling on the anchor and vote lists. The anchor is sampled further server-side.</summary>
+    private const int MaxStationTracks = 500;
+
     /// <param name="SeedTrackIds">Recently played, most recent first.</param>
     /// <param name="ExcludeTrackIds">What the caller already has queued or has just heard.</param>
     /// <param name="Count">Batch size. Clamped by the service to [1, 500].</param>
+    /// <param name="AnchorTrackIds">The tracks the listener chose for this station.</param>
+    /// <param name="LikedTrackIds">Tracks marked "+".</param>
+    /// <param name="DislikedTrackIds">Tracks marked "−".</param>
+    /// <param name="AutoPlayedTrackIds">Tracks auto-play itself queued; they count less as seeds.</param>
     public sealed record AutoPlayRequest(
-        IReadOnlyList<Guid> SeedTrackIds,
+        IReadOnlyList<Guid>? SeedTrackIds,
         IReadOnlyList<Guid>? ExcludeTrackIds = null,
-        int Count = 20);
+        int Count = 20,
+        IReadOnlyList<Guid>? AnchorTrackIds = null,
+        IReadOnlyList<Guid>? LikedTrackIds = null,
+        IReadOnlyList<Guid>? DislikedTrackIds = null,
+        IReadOnlyList<Guid>? AutoPlayedTrackIds = null);
 
     /// <summary>
     /// The next batch for a queue that should not end - the player's Auto-Play toggle.
@@ -96,14 +107,20 @@ public class TracksController(
     public async Task<ActionResult<TrackListResponse>> AutoPlay(
         [FromBody] AutoPlayRequest request, CancellationToken ct)
     {
-        var seeds = (request.SeedTrackIds ?? []).Take(MaxAutoPlaySeeds).ToList();
-        if (seeds.Count == 0)
-            return BadRequestProblem("At least one seed track is required");
+        var station = new AutoPlayStation(
+            (request.SeedTrackIds ?? []).Take(MaxAutoPlaySeeds).ToList(),
+            (request.AnchorTrackIds ?? []).Take(MaxStationTracks).ToList(),
+            (request.LikedTrackIds ?? []).Take(MaxStationTracks).ToList(),
+            (request.DislikedTrackIds ?? []).Take(MaxStationTracks).ToList(),
+            (request.AutoPlayedTrackIds ?? []).Take(MaxAutoPlayExclusions).ToList());
+
+        if (station.Recent.Count == 0 && station.AnchorOrEmpty.Count == 0 && station.LikedOrEmpty.Count == 0)
+            return BadRequestProblem("At least one seed, anchor or liked track is required");
 
         // Trimmed from the front: the list arrives most-recent-first, same as the seeds.
         var exclude = (request.ExcludeTrackIds ?? []).Take(MaxAutoPlayExclusions).ToList();
 
-        var tracks = await similarity.GetAutoPlayQueueAsync(seeds, exclude, request.Count, ct);
+        var tracks = await similarity.GetAutoPlayQueueAsync(station, exclude, request.Count, ct);
         return await ToResponseAsync(tracks, ct);
     }
 

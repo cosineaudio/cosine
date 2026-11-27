@@ -18,12 +18,19 @@ public class SimilarityService : ISimilarityService
     private const int RadioArtistFanout = 25;
 
     /// <summary>
-    /// How many distinct artists from the recent seeds an auto-play batch blends. Three is enough
-    /// for a queue that has drifted to continue from the drift rather than the start, while the
-    /// fan-out below still stays inside <see cref="RadioArtistFanout"/> in total: every extra seed
-    /// is another artist's whole track list loaded to rank it.
+    /// How many distinct artists an auto-play batch blends, heaviest first. Weight comes from the
+    /// whole station - anchor, recent plays, "+" votes - so this is the handful of artists the
+    /// station is actually about, not the last three that happened to play. The fan-out below
+    /// still keeps the total inside <see cref="RadioArtistFanout"/>-ish: every extra seed is another
+    /// artist's whole track list loaded to rank it.
     /// </summary>
-    private const int AutoPlaySeedArtists = 3;
+    private const int AutoPlaySeedArtists = 5;
+
+    /// <summary>
+    /// How much weight each "−" takes off its artist. One dislike on an artist the station is
+    /// built around dents it; an artist only ever met in dislikes is steered away from entirely.
+    /// </summary>
+    private const double DislikedArtistPenalty = 1.0;
 
     /// <summary>
     /// Similar artists per seed, however many seeds there are. Splitting the fan-out evenly is
@@ -257,42 +264,50 @@ public class SimilarityService : ISimilarityService
         return byArtist.GetValueOrDefault(artistId, []);
     }
 
-    public async Task<IReadOnlyList<Track>> GetAutoPlayQueueAsync(
+    public Task<IReadOnlyList<Track>> GetAutoPlayQueueAsync(
         IReadOnlyList<Guid> seedTrackIds, IReadOnlyCollection<Guid> excludeTrackIds, int count,
+        CancellationToken ct = default)
+        => GetAutoPlayQueueAsync(AutoPlayStation.FromRecent(seedTrackIds), excludeTrackIds, count, ct);
+
+    public async Task<IReadOnlyList<Track>> GetAutoPlayQueueAsync(
+        AutoPlayStation station, IReadOnlyCollection<Guid> excludeTrackIds, int count,
         CancellationToken ct = default)
     {
         count = Math.Clamp(count, 1, 500);
-        if (seedTrackIds.Count == 0) return [];
 
-        var seedArtists = await ResolveSeedArtistsAsync(seedTrackIds, ct);
+        var weights = StationWeighting.Weigh(station);
+        if (weights.Positive.Count == 0) return [];
+
+        var (seedArtists, avoidedArtists) = await ResolveSeedArtistsAsync(weights, ct);
         if (seedArtists.Count == 0) return [];
 
         // Every seed contributes its own artist and that artist's neighbourhood, weighted by how
-        // recently it was heard. Scores are *summed* where two seeds reach the same artist: one
-        // that is similar to two of the last three things you played is a better pick than one
-        // similar to either alone, and this is the only place that can show up.
+        // much of the station it carries. Scores are *summed* where two seeds reach the same
+        // artist: one similar to two of the station's artists is a better pick than one similar
+        // to either alone, and this is the only place that can show up.
         var fanout = Math.Max(RadioArtistFanout / seedArtists.Count, MinAutoPlayFanout);
         var seedWeights = new Dictionary<Guid, double>();
         var similarWeights = new Dictionary<Guid, double>();
+        var heaviest = seedArtists[0].Weight;
 
-        for (var i = 0; i < seedArtists.Count; i++)
+        foreach (var (seedId, rawWeight) in seedArtists)
         {
-            var seedId = seedArtists[i];
-            // 1, ½, ⅓ - the track that just played matters most, and the one three back still counts.
-            var recency = 1.0 / (i + 1);
-            seedWeights[seedId] = seedWeights.GetValueOrDefault(seedId) + recency;
+            var weight = rawWeight / heaviest;
+            seedWeights[seedId] = weight;
 
             foreach (var (artist, score) in await GetSimilarArtistsAsync(seedId, fanout, ct))
             {
-                if (seedWeights.ContainsKey(artist.Id)) continue;
-                similarWeights[artist.Id] = similarWeights.GetValueOrDefault(artist.Id) + recency * score;
+                if (seedWeights.ContainsKey(artist.Id) || avoidedArtists.Contains(artist.Id)) continue;
+                similarWeights[artist.Id] = similarWeights.GetValueOrDefault(artist.Id) + weight * score;
             }
         }
 
         // A seed reached as a neighbour of an earlier seed is a seed, not a neighbour.
         foreach (var seedId in seedWeights.Keys) similarWeights.Remove(seedId);
 
-        var exclude = excludeTrackIds as HashSet<Guid> ?? [.. excludeTrackIds];
+        var exclude = new HashSet<Guid>(excludeTrackIds);
+        // A track the listener rejected is never handed back, wherever else it would have come from.
+        exclude.UnionWith(weights.Negative);
         var topSongs = await GetTopSongsForArtistsAsync(
             [.. seedWeights.Keys, .. similarWeights.Keys], count, exclude, ct);
 
@@ -313,8 +328,8 @@ public class SimilarityService : ISimilarityService
             return added;
         }
 
-        // Roughly a third of the batch stays with the artists actually being listened to, split
-        // between them by recency - the same seed budget a single-artist radio uses.
+        // Roughly a third of the batch stays with the station's own artists, split between them
+        // by weight - the same seed budget a single-artist radio uses.
         var seedBudget = Math.Min(count, SimilarityScoring.SeedTrackBudget(count));
         Distribute(seedWeights, seedBudget, seedBudget, guaranteeEach: true, Fill);
 
@@ -326,7 +341,7 @@ public class SimilarityService : ISimilarityService
         if (audioBudget > 0)
         {
             var audioTracks = await GetAudioSimilarTracksAsync(
-                seedTrackIds, exclude, seen, audioBudget, ct);
+                weights, exclude, seen, audioBudget, ct);
 
             foreach (var track in audioTracks)
             {
@@ -388,7 +403,7 @@ public class SimilarityService : ISimilarityService
     /// </para>
     /// </summary>
     private async Task<List<Track>> GetAudioSimilarTracksAsync(
-        IReadOnlyList<Guid> seedTrackIds,
+        StationWeights weights,
         IReadOnlyCollection<Guid> exclude,
         IReadOnlyCollection<Guid> alreadyQueued,
         int count,
@@ -397,7 +412,8 @@ public class SimilarityService : ISimilarityService
         var excludeAll = new HashSet<Guid>(exclude);
         excludeAll.UnionWith(alreadyQueued);
 
-        var ranked = await _audio.GetSimilarTracksAsync(seedTrackIds, excludeAll, count, ct);
+        var ranked = await _audio.GetSteeredTracksAsync(
+            weights.Positive, [.. weights.Negative], excludeAll, count, ct);
         if (ranked.Count == 0) return [];
 
         var ids = ranked.Select(r => r.TrackId).ToList();
@@ -417,29 +433,43 @@ public class SimilarityService : ISimilarityService
     }
 
     /// <summary>
-    /// The distinct artists behind the seed tracks, in the order they were heard and capped at
-    /// <see cref="AutoPlaySeedArtists"/>. Unknown ids are skipped rather than failing the batch:
-    /// a queue holding a track that has since been rescanned away should still continue.
+    /// The station's artists by total weight, heaviest first and capped at
+    /// <see cref="AutoPlaySeedArtists"/>, plus the artists it has been steered away from - those
+    /// whose dislikes outweigh everything else the station says about them. Unknown ids are
+    /// skipped rather than failing the batch: a queue holding a track that has since been
+    /// rescanned away should still continue.
     /// </summary>
-    private async Task<List<Guid>> ResolveSeedArtistsAsync(
-        IReadOnlyList<Guid> seedTrackIds, CancellationToken ct)
+    private async Task<(List<(Guid ArtistId, double Weight)> Seeds, HashSet<Guid> Avoided)> ResolveSeedArtistsAsync(
+        StationWeights weights, CancellationToken ct)
     {
-        var ids = seedTrackIds.Distinct().ToList();
+        var ids = weights.Positive.Keys.Concat(weights.Negative).Distinct().ToList();
         var artistByTrack = await _db.Tracks
             .Where(t => ids.Contains(t.Id))
             .Select(t => new { t.Id, t.ArtistId })
             .ToDictionaryAsync(x => x.Id, x => x.ArtistId, ct);
 
-        var artists = new List<Guid>();
-        foreach (var trackId in seedTrackIds)
+        var byArtist = new Dictionary<Guid, double>();
+        foreach (var (trackId, weight) in weights.Positive)
         {
-            if (!artistByTrack.TryGetValue(trackId, out var artistId)) continue;
-            if (artists.Contains(artistId)) continue;
-            artists.Add(artistId);
-            if (artists.Count == AutoPlaySeedArtists) break;
+            if (artistByTrack.TryGetValue(trackId, out var artistId))
+                byArtist[artistId] = byArtist.GetValueOrDefault(artistId) + weight;
         }
 
-        return artists;
+        foreach (var trackId in weights.Negative)
+        {
+            if (artistByTrack.TryGetValue(trackId, out var artistId))
+                byArtist[artistId] = byArtist.GetValueOrDefault(artistId) - DislikedArtistPenalty;
+        }
+
+        var avoided = byArtist.Where(a => a.Value <= 0).Select(a => a.Key).ToHashSet();
+        var seeds = byArtist
+            .Where(a => a.Value > 0)
+            .OrderByDescending(a => a.Value)
+            .Take(AutoPlaySeedArtists)
+            .Select(a => (a.Key, a.Value))
+            .ToList();
+
+        return (seeds, avoided);
     }
 
     /// <summary>

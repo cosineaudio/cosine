@@ -69,6 +69,9 @@ public interface IPlaybackSessionManager
     /// <summary>Current queue, or null if there is no live session with that id.</summary>
     PlaybackQueueSnapshot? TryGetQueue(Guid sessionId);
 
+    /// <summary>The session's auto-play station, or null when the session is not live.</summary>
+    AutoPlayStationState? TryGetStation(Guid sessionId);
+
     /// <summary>
     /// Whether a session is still live. The stream endpoint asks this before serving bytes, so
     /// ending a session revokes its outstanding tokens without needing to track them.
@@ -120,6 +123,20 @@ public interface IPlaybackSessionManager
     /// </summary>
     Task<PlaybackStateSnapshot> SetAutoPlayAsync(
         Guid sessionId, PlaybackCaller caller, bool enabled, CancellationToken ct);
+
+    /// <summary>
+    /// Replace what the session's auto-play steers by - a radio started from an album, or a
+    /// station carried over from the browser - and re-fetch whatever auto-play had queued.
+    /// </summary>
+    Task<PlaybackStateSnapshot> SetStationAsync(
+        Guid sessionId, PlaybackCaller caller, AutoPlayStationState station, CancellationToken ct);
+
+    /// <summary>
+    /// "+" (1), "−" (-1) or clear (0) a track on the session's station. With auto-play on, the
+    /// not-yet-played auto-play entries are replaced, and "−" on the playing track skips it.
+    /// </summary>
+    Task<PlaybackStateSnapshot> VoteAsync(
+        Guid sessionId, PlaybackCaller caller, Guid trackId, int vote, CancellationToken ct);
 
     /// <summary>
     /// One poll cycle for one session: ask the device where it is, publish the state if it

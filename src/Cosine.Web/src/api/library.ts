@@ -27,6 +27,14 @@ export interface AutoPlayOptions {
   excludeTrackIds?: string[];
   /** Batch size. The server clamps it. */
   count?: number;
+  /** The tracks the listener chose for this station; every one counts, however long ago. */
+  anchorTrackIds?: string[];
+  /** Voted "+". */
+  likedTrackIds?: string[];
+  /** Voted "−": never returned, and steered away from. */
+  dislikedTrackIds?: string[];
+  /** Queued by auto-play itself; they count less as seeds. */
+  autoPlayedTrackIds?: string[];
 }
 
 /**
@@ -39,6 +47,10 @@ export async function getAutoPlayQueue(opts: AutoPlayOptions): Promise<Track[]> 
     seedTrackIds: opts.seedTrackIds,
     excludeTrackIds: opts.excludeTrackIds ?? [],
     count: opts.count ?? 20,
+    anchorTrackIds: opts.anchorTrackIds ?? [],
+    likedTrackIds: opts.likedTrackIds ?? [],
+    dislikedTrackIds: opts.dislikedTrackIds ?? [],
+    autoPlayedTrackIds: opts.autoPlayedTrackIds ?? [],
   });
   return data.tracks.map(dtoToTrack);
 }

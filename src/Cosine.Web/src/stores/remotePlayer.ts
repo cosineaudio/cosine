@@ -5,7 +5,7 @@ import type { Track } from '@/api/types';
 import type { RepeatMode } from '@/stores/player';
 import * as api from '@/api/playback';
 import type {
-  PlaybackDevice, PlaybackQueueSnapshot, PlaybackRepeatMode, PlaybackSessionState,
+  AutoPlayStationState, PlaybackDevice, PlaybackQueueSnapshot, PlaybackRepeatMode, PlaybackSessionState,
   PlaybackStateSnapshot,
 } from '@/api/playback';
 
@@ -107,6 +107,11 @@ export const useRemotePlayerStore = defineStore('remotePlayer', () => {
   const autoPlay = ref(false);
   /** Track ids the session queued itself, from the queue snapshot. */
   const autoPlayIds = ref<Set<string>>(new Set());
+  /** The session's station votes, mirrored from the state snapshot. */
+  const stationLiked = ref(0);
+  const stationDisliked = ref(0);
+  /** The playing track's vote: 1 "+", -1 "−", 0 none. */
+  const currentVote = ref<-1 | 0 | 1>(0);
 
   const isPlaying = computed(() => sessionState.value === 'Playing');
   const currentTrack = computed(() => queue.value[queueIndex.value] ?? null);
@@ -216,6 +221,9 @@ export const useRemotePlayerStore = defineStore('remotePlayer', () => {
     isShuffled.value = s.shuffle;
     repeatMode.value = REPEAT_FROM_SERVER[s.repeatMode] ?? 'off';
     autoPlay.value = s.autoPlay;
+    stationLiked.value = s.stationLiked ?? 0;
+    stationDisliked.value = s.stationDisliked ?? 0;
+    currentVote.value = (Math.sign(s.currentVote ?? 0) as -1 | 0 | 1);
 
     const position = s.positionMs / 1000;
     // A new track always resets the scrubber: interpolation from the previous track's position
@@ -411,6 +419,9 @@ export const useRemotePlayerStore = defineStore('remotePlayer', () => {
     reportedDuration.value = 0;
     autoPlay.value = false;
     autoPlayIds.value = new Set();
+    stationLiked.value = 0;
+    stationDisliked.value = 0;
+    currentVote.value = 0;
     inFlight.value = 0;
     positionHoldUntil = 0;
   }
@@ -571,6 +582,59 @@ export const useRemotePlayerStore = defineStore('remotePlayer', () => {
     return autoPlayIds.value.has(trackId);
   }
 
+  /** "+" / "−" / clear for a track. The session replaces its auto-play entries, and skips on "−". */
+  function vote(trackId: string, value: -1 | 0 | 1): void {
+    if (trackId === currentTrackId.value) currentVote.value = value;
+    send((id) => api.vote(id, trackId, value));
+  }
+
+  /** Hand the session a station - the browser's, on the way over. */
+  async function setStation(station: AutoPlayStationState): Promise<void> {
+    const id = sessionId.value;
+    if (!id) return;
+    applyState(await api.setStation(id, station), true);
+  }
+
+  /** The session's station, so it can come back to the browser with the queue. */
+  async function getStation(): Promise<AutoPlayStationState | null> {
+    const id = sessionId.value;
+    if (!id) return null;
+    try {
+      return await api.getStation(id);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Start a radio on the speaker: the chosen track alone, then the station it steers by, then
+   * auto-play. Awaited in order like `adopt` - a station that overtook the queue would be reset by
+   * it, since a new queue is a new station.
+   */
+  async function startStation(first: Track, station: AutoPlayStationState): Promise<void> {
+    const id = sessionId.value;
+    if (!id || rejectRadio([first])) return;
+
+    queue.value = [first];
+    queueIndex.value = 0;
+    currentTime.value = 0;
+    sessionState.value = 'Playing';
+    autoPlay.value = true;
+
+    inFlight.value++;
+    try {
+      applyState(await api.setQueue(id, [first.id], 0), true);
+      applyState(await api.setStation(id, station), true);
+      applyState(await api.setAutoPlay(id, true), true);
+      error.value = null;
+    } catch (err: unknown) {
+      error.value = err instanceof Error ? err.message : 'The device would not start the radio';
+      await refresh();
+    } finally {
+      inFlight.value = Math.max(0, inFlight.value - 1);
+    }
+  }
+
   /**
    * No-op by design. The stream format for a remote session is the device's `TranscodeProfile`,
    * set per device in admin, because the speaker fetches its own bytes - this browser's
@@ -618,6 +682,13 @@ export const useRemotePlayerStore = defineStore('remotePlayer', () => {
     autoPlay,
     setAutoPlay,
     isAutoPlayTrack,
+    stationLiked,
+    stationDisliked,
+    currentVote,
+    vote,
+    setStation,
+    getStation,
+    startStation,
 
     // PlaybackOutput commands
     play,

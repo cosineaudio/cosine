@@ -1,13 +1,11 @@
 import { computed, type ComputedRef } from 'vue';
 import { useRouter } from 'vue-router';
-import { toast } from 'vue-sonner';
 import { Play, ListPlus, ListEnd, Disc, User, Heart, Radio } from 'lucide-vue-next';
-import { getSimilarSongs2 } from '@/api/browsing';
 import type { MenuItem } from '@/components/ui/ContextMenu.vue';
-import { usePlaybackStore } from '@/stores/playback';
 import { useFavoritesStore } from '@/stores/favorites';
 import { usePlayback } from '@/composables/usePlayback';
 import { usePlaylistMenu } from '@/composables/usePlaylistMenu';
+import { useRadio } from '@/composables/useRadio';
 import type { Track } from '@/api/types';
 
 export interface TrackMenuOptions {
@@ -24,6 +22,11 @@ export interface TrackMenuOptions {
   navigate?: (name: 'album' | 'artist', id: string) => void;
   /** Extra items appended below the defaults, e.g. "Remove from queue". */
   extra?: () => MenuItem[];
+  /**
+   * The list the track is shown in - an album, playlist, genre page. "Start radio" anchors the
+   * station on it as well as on the track, so the radio stays near where it was started.
+   */
+  context?: () => Track[];
 }
 
 /**
@@ -38,41 +41,13 @@ export function useTrackMenu(
   opts: TrackMenuOptions = {},
 ): ComputedRef<MenuItem[]> {
   const router = useRouter();
-  const player = usePlaybackStore();
   const favorites = useFavoritesStore();
   const { queueTracks } = usePlayback();
   const { addToPlaylistItem } = usePlaylistMenu();
 
   const go = opts.navigate ?? ((name: 'album' | 'artist', id: string) => router.push({ name, params: { id } }));
 
-  /**
-   * Seed a radio from this song's artist and similar artists.
-   *
-   * Building the queue is a similarity query across the library, not a lookup, so
-   * it can take a moment. The menu closes the instant it is picked, which leaves
-   * nowhere on the trigger to put a spinner - so the feedback is a toast that
-   * starts as "Starting radio…" and is then replaced in place by the outcome.
-   */
-  let radioPending = false;
-
-  async function startRadio(t: Track): Promise<void> {
-    if (radioPending) return;
-    radioPending = true;
-    const id = toast.loading('Starting radio…');
-    try {
-      const tracks = await getSimilarSongs2(t.id, 100);
-      if (tracks.length === 0) {
-        toast.error('Not enough library data to build a radio yet', { id });
-        return;
-      }
-      player.play(tracks[0], tracks);
-      toast.success('Radio started', { id });
-    } catch {
-      toast.error('Could not start radio', { id });
-    } finally {
-      radioPending = false;
-    }
-  }
+  const radio = useRadio();
 
   return computed<MenuItem[]>(() => {
     const t = track();
@@ -83,7 +58,7 @@ export function useTrackMenu(
       ...(opts.play ? [{ label: 'Play', icon: Play, onSelect: opts.play } as MenuItem] : []),
       { label: 'Play next', icon: ListPlus, onSelect: () => queueTracks([t], 'next') },
       { label: 'Add to queue', icon: ListEnd, onSelect: () => queueTracks([t], 'end') },
-      { label: 'Start radio', icon: Radio, onSelect: () => startRadio(t) },
+      { label: 'Start radio', icon: Radio, onSelect: () => radio.fromTrack(t, opts.context?.() ?? []) },
       { separator: true, label: '' },
       {
         label: isFav ? 'Remove favorite' : 'Favorite',

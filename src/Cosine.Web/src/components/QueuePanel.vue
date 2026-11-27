@@ -100,6 +100,19 @@ watch(() => player.queueIndex, () => { if (ui.queueOpen) void revealCurrent('smo
                 >
                   <InfinityIcon :size="12" :stroke-width="2" />
                   <span>auto-play on</span>
+                  <template v-if="player.stationLiked + player.stationDisliked > 0">
+                    <span class="text-muted">·</span>
+                    <span :title="`${player.stationLiked} fit, ${player.stationDisliked} did not`">
+                      {{ player.stationLiked }}+ {{ player.stationDisliked }}−
+                    </span>
+                    <span class="text-muted">·</span>
+                    <button
+                      type="button"
+                      class="text-muted underline-offset-2 transition-colors hover:text-text hover:underline"
+                      title="Forget the + and − votes and steer by the queue you started again"
+                      @click="player.resetVotes()"
+                    >reset</button>
+                  </template>
                 </p>
               </div>
               <div class="flex items-center gap-1">

@@ -417,4 +417,81 @@ describe('autoPlay store', () => {
     expect(player.currentTrack!.id).toBe('t60');
     expect(player.queue[0].id).toBe('t10');
   });
+
+  describe('steering', () => {
+    it('sends the whole station, not just what played last', async () => {
+      const player = usePlayerStore();
+      const auto = useAutoPlayStore();
+      player.play(track('t0'), queueOf(2));
+      auto.resetStation(['p0', 'p1', 'p2', 't0', 't1']);
+
+      auto.setEnabled(true);
+      await settle();
+
+      const sent = autoPlayMock.mock.calls[0][0] as { anchorTrackIds: string[] };
+      expect(sent.anchorTrackIds).toEqual(['p0', 'p1', 'p2', 't0', 't1']);
+    });
+
+    it('"+" replaces what auto-play had queued, keeping the listener\'s own tracks', async () => {
+      const player = usePlayerStore();
+      const auto = useAutoPlayStore();
+      player.play(track('t0'), queueOf(2));
+      auto.setEnabled(true);
+      await settle();
+      expect(player.queue.map((t) => t.id)).toEqual(['t0', 't1', 'r1', 'r2']);
+
+      autoPlayMock.mockResolvedValue([track('s1'), track('s2')]);
+      await auto.vote('t0', 1);
+      await settle();
+
+      expect(player.queue.map((t) => t.id)).toEqual(['t0', 't1', 's1', 's2']);
+      expect(auto.currentVote).toBe(1);
+      const sent = autoPlayMock.mock.calls.at(-1)![0] as { likedTrackIds: string[] };
+      expect(sent.likedTrackIds).toEqual(['t0']);
+    });
+
+    it('"−" on the playing track skips it, and the replacement is already steered', async () => {
+      const player = usePlayerStore();
+      const auto = useAutoPlayStore();
+      player.play(track('t0'), [track('t0')]);
+      auto.setEnabled(true);
+      await settle();
+
+      autoPlayMock.mockResolvedValue([track('s1'), track('s2')]);
+      await auto.vote('t0', -1);
+      await settle();
+
+      expect(player.currentTrack!.id).toBe('s1');
+      expect(player.queue.map((t) => t.id)).not.toContain('r1');
+      const sent = autoPlayMock.mock.calls.at(-1)![0] as {
+        dislikedTrackIds: string[]; excludeTrackIds: string[];
+      };
+      expect(sent.dislikedTrackIds).toEqual(['t0']);
+      expect(sent.excludeTrackIds).toContain('t0');
+    });
+
+    it('never queues a disliked track, whatever the server sends', async () => {
+      const player = usePlayerStore();
+      const auto = useAutoPlayStore();
+      player.play(track('t0'), queueOf(2));
+      await auto.vote('r1', -1);
+
+      auto.setEnabled(true);
+      await settle();
+
+      expect(player.queue.map((t) => t.id)).toEqual(['t0', 't1', 'r2']);
+    });
+
+    it('a new station forgets the votes', async () => {
+      const auto = useAutoPlayStore();
+      await auto.vote('x', 1);
+      await auto.vote('y', -1);
+
+      auto.resetStation(['a']);
+
+      expect(auto.likedCount).toBe(0);
+      expect(auto.dislikedCount).toBe(0);
+      expect(auto.stationState().anchor).toEqual(['a']);
+    });
+  });
 });

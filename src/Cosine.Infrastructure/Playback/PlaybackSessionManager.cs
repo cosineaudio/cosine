@@ -68,6 +68,9 @@ public sealed class PlaybackSessionManager : IPlaybackSessionManager, IAsyncDisp
     /// the blend is actually built from, and the service caps those at three.</summary>
     private const int AutoPlaySeedCount = 8;
 
+    /// <summary>Most anchor tracks a session keeps. The weighting samples it down further.</summary>
+    private const int AnchorLimit = 500;
+
     private readonly IServiceScopeFactory _scopes;
     private readonly IReadOnlyList<IPlaybackDriver> _drivers;
     private readonly IHubContext<PlaybackHub> _hub;
@@ -127,6 +130,11 @@ public sealed class PlaybackSessionManager : IPlaybackSessionManager, IAsyncDisp
 
     public PlaybackQueueSnapshot? TryGetQueue(Guid sessionId) =>
         _sessions.TryGetValue(sessionId, out var s) ? s.QueueSnapshot() : null;
+
+    public AutoPlayStationState? TryGetStation(Guid sessionId) =>
+        _sessions.TryGetValue(sessionId, out var s)
+            ? new AutoPlayStationState([.. s.Anchor], [.. s.Liked], [.. s.Disliked])
+            : null;
 
     // ---- Devices ----
 
@@ -520,6 +528,8 @@ public sealed class PlaybackSessionManager : IPlaybackSessionManager, IAsyncDisp
         MutateAsync(sessionId, caller, async (s, sp, c) =>
         {
             await LoadMetadataAsync(s, trackIds, sp, c);
+            // A new queue is a new station: what the listener just chose is what it steers by.
+            s.ResetStation(trackIds);
             var move = s.Queue.SetQueue(trackIds, startIndex);
             await ApplyAsync(s, move, sp, c);
             // A handful of tracks handed to an auto-playing session is a seed, not a queue; it
@@ -532,6 +542,8 @@ public sealed class PlaybackSessionManager : IPlaybackSessionManager, IAsyncDisp
         MutateAsync(sessionId, caller, async (s, sp, c) =>
         {
             await LoadMetadataAsync(s, trackIds, sp, c);
+            // Queued by hand, so it is part of what the listener wants from this station.
+            s.AddToAnchor(trackIds);
             var move = s.Queue.Add(trackIds, insertAt);
             await ApplyAsync(s, move, sp, c);
             // Appending to a queue whose last track is playing - an endless radio does exactly
@@ -658,7 +670,63 @@ public sealed class PlaybackSessionManager : IPlaybackSessionManager, IAsyncDisp
             if (enabled) await MaybeAutoPlayAsync(s, sp, c);
         }, ct);
 
+    public Task<PlaybackStateSnapshot> SetStationAsync(
+        Guid sessionId, PlaybackCaller caller, AutoPlayStationState station, CancellationToken ct) =>
+        MutateAsync(sessionId, caller, async (s, sp, c) =>
+        {
+            s.ResetStation(station.Anchor);
+            s.Liked.UnionWith(station.Liked);
+            s.Disliked.UnionWith(station.Disliked);
+            s.Liked.ExceptWith(s.Disliked);
+            // Whatever auto-play queued before it knew this was guessing; guess again.
+            await RefreshAutoPlayAsync(s, sp, c);
+        }, ct);
+
+    public Task<PlaybackStateSnapshot> VoteAsync(
+        Guid sessionId, PlaybackCaller caller, Guid trackId, int vote, CancellationToken ct) =>
+        MutateAsync(sessionId, caller, async (s, sp, c) =>
+        {
+            s.Liked.Remove(trackId);
+            s.Disliked.Remove(trackId);
+            if (vote > 0) s.Liked.Add(trackId);
+            else if (vote < 0) s.Disliked.Add(trackId);
+
+            if (!s.AutoPlay) return;
+            await RefreshAutoPlayAsync(s, sp, c);
+
+            // "Doesn't fit" on what is playing is also "skip it" - by now the next track is
+            // already one chosen with the vote in mind.
+            if (vote < 0 && s.Queue.CurrentTrackId == trackId)
+            {
+                await MaybeAutoPlayAsync(s, sp, c);
+                await ApplyAsync(s, s.Queue.Next(), sp, c);
+            }
+        }, ct);
+
     // ---- Auto-play ----
+
+    /// <summary>
+    /// Drop what auto-play queued but has not played yet, and fetch afresh. Anything the listener
+    /// queued themselves stays exactly where it is.
+    /// </summary>
+    private async Task RefreshAutoPlayAsync(LiveSession session, IServiceProvider sp, CancellationToken ct)
+    {
+        // By "not played yet" rather than by position: under shuffle the entries after the index
+        // are not the ones still to come.
+        var tracks = session.Queue.Tracks;
+        var played = session.Played.ToHashSet();
+        for (var i = tracks.Count - 1; i >= 0; i--)
+        {
+            if (i == session.Queue.Index) continue;
+            var id = tracks[i];
+            if (!session.AutoPlayed.Contains(id) || played.Contains(id)) continue;
+            await ApplyAsync(session, session.Queue.Remove(i), sp, ct);
+            session.AutoPlayed.Remove(id);
+        }
+
+        SchedulePreload(session);
+        await MaybeAutoPlayAsync(session, sp, ct);
+    }
 
     /// <summary>
     /// Keep an auto-playing session's queue from running out, and from growing without end.
@@ -685,7 +753,10 @@ public sealed class PlaybackSessionManager : IPlaybackSessionManager, IAsyncDisp
 
         var seeds = session.Played.Take(AutoPlaySeedCount).ToList();
         if (seeds.Count == 0 && session.Queue.CurrentTrackId is { } current) seeds.Add(current);
-        if (seeds.Count == 0) return;
+        if (seeds.Count == 0 && session.Anchor.Count == 0 && session.Liked.Count == 0) return;
+
+        var station = new AutoPlayStation(
+            seeds, [.. session.Anchor], [.. session.Liked], [.. session.Disliked], [.. session.AutoPlayed]);
 
         // Everything queued and everything heard: a radio that circles back to the track from
         // twenty minutes ago is the failure mode this whole feature is judged on.
@@ -696,7 +767,7 @@ public sealed class PlaybackSessionManager : IPlaybackSessionManager, IAsyncDisp
         try
         {
             batch = await sp.GetRequiredService<ISimilarityService>()
-                .GetAutoPlayQueueAsync(seeds, exclude, AutoPlayBatchSize, ct);
+                .GetAutoPlayQueueAsync(station, exclude, AutoPlayBatchSize, ct);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -1403,6 +1474,33 @@ public sealed class PlaybackSessionManager : IPlaybackSessionManager, IAsyncDisp
         /// <summary>Ids auto-play put in the queue, so the queue panel can mark them.</summary>
         public HashSet<Guid> AutoPlayed { get; } = [];
 
+        /// <summary>
+        /// The tracks the listener chose for this station: the queue they started, plus anything
+        /// they queued by hand since. Capped from the oldest end.
+        /// </summary>
+        public List<Guid> Anchor { get; } = [];
+
+        /// <summary>Tracks voted "+" on this station.</summary>
+        public HashSet<Guid> Liked { get; } = [];
+
+        /// <summary>Tracks voted "−" on this station.</summary>
+        public HashSet<Guid> Disliked { get; } = [];
+
+        public void ResetStation(IEnumerable<Guid> anchor)
+        {
+            Anchor.Clear();
+            Liked.Clear();
+            Disliked.Clear();
+            AddToAnchor(anchor);
+        }
+
+        public void AddToAnchor(IEnumerable<Guid> trackIds)
+        {
+            foreach (var id in trackIds)
+                if (!Anchor.Contains(id)) Anchor.Add(id);
+            if (Anchor.Count > AnchorLimit) Anchor.RemoveRange(0, Anchor.Count - AnchorLimit);
+        }
+
         public void NotePlayed(Guid trackId)
         {
             Played.Remove(trackId);
@@ -1494,7 +1592,11 @@ public sealed class PlaybackSessionManager : IPlaybackSessionManager, IAsyncDisp
             (long)Position.TotalMilliseconds,
             Duration is { } d ? (long)d.TotalMilliseconds : null,
             VolumePercent, Queue.RepeatMode, Queue.Shuffled, Queue.Version,
-            OwnerUserId, OwnerUsername, now, AutoPlay);
+            OwnerUserId, OwnerUsername, now, AutoPlay,
+            Liked.Count, Disliked.Count,
+            Queue.CurrentTrackId is { } playing
+                ? Liked.Contains(playing) ? 1 : Disliked.Contains(playing) ? -1 : 0
+                : 0);
 
         public PlaybackQueueSnapshot QueueSnapshot()
         {

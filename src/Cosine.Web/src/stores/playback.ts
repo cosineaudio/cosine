@@ -67,7 +67,11 @@ export const usePlaybackStore = defineStore('playback', () => {
    * playing a track already in the queue does not change where the queue came from.
    */
   const play = (track: Track, newQueue?: Track[], source: QueueSource | null = null) => {
-    if (newQueue) autoPlay.setQueueSource(source);
+    if (newQueue) {
+      autoPlay.setQueueSource(source);
+      // A new queue is a new station. A speaker's session resets its own on `setQueue`.
+      if (!remote.isActive) autoPlay.resetStation(newQueue.map((t) => t.id));
+    }
     active.value.play(track, newQueue);
   };
   const pause = () => active.value.pause();
@@ -78,8 +82,12 @@ export const usePlaybackStore = defineStore('playback', () => {
   const seek = (seconds: number) => active.value.seek(seconds);
   const setVolume = (level: number) => active.value.setVolume(level);
   const toggleMute = () => active.value.toggleMute();
-  const addToQueue = (tracks: Track[], position: 'next' | 'end' = 'end') =>
+  const addToQueue = (tracks: Track[], position: 'next' | 'end' = 'end') => {
+    // Queued by hand, so it is part of what the station is about. Auto-play's own top-ups go
+    // straight to `player.ts` and never pass through here.
+    if (!remote.isActive) autoPlay.addToAnchor(tracks.map((t) => t.id));
     active.value.addToQueue(tracks, position);
+  };
   const removeFromQueue = (index: number) => active.value.removeFromQueue(index);
   const moveInQueue = (from: number, to: number) => active.value.moveInQueue(from, to);
   const playAt = (index: number) => active.value.playAt(index);
@@ -124,6 +132,63 @@ export const usePlaybackStore = defineStore('playback', () => {
 
   /** Only the browser's own auto-play reports a failure; a session's happens out of sight. */
   const autoPlayError = computed(() => (remote.isActive ? null : autoPlay.error));
+
+  // ---- Station steering ----
+  //
+  // "+" / "−" on whatever is playing: this fits the station, this does not. Both outputs re-fetch
+  // what auto-play had queued, and "−" skips the track.
+
+  /** The playing track's vote: 1 "+", -1 "−", 0 none. */
+  const currentVote = computed<-1 | 0 | 1>(() =>
+    (remote.isActive ? remote.currentVote : autoPlay.currentVote));
+  const stationLiked = computed(() => (remote.isActive ? remote.stationLiked : autoPlay.likedCount));
+  const stationDisliked = computed(() =>
+    (remote.isActive ? remote.stationDisliked : autoPlay.dislikedCount));
+
+  /** Vote on the playing track. Pressing the lit button again clears the vote. */
+  function steer(value: -1 | 1): void {
+    const id = currentTrackId.value;
+    if (!id) return;
+    const next = currentVote.value === value ? 0 : value;
+    if (remote.isActive) remote.vote(id, next);
+    else void autoPlay.vote(id, next);
+  }
+
+  /** The undo on "−": clear the vote and go back to the track it skipped, if it is still queued. */
+  async function undoDoesNotFit(trackId: string): Promise<void> {
+    if (remote.isActive) remote.vote(trackId, 0);
+    else await autoPlay.vote(trackId, 0);
+    if (currentTrackId.value === trackId) return;
+    const index = queue.value.findIndex((t) => t.id === trackId);
+    if (index >= 0) playAt(index);
+  }
+
+  /** Forget the votes and steer by the anchor alone again. */
+  function resetVotes(): void {
+    if (remote.isActive) {
+      void remote.getStation().then((s) => {
+        if (s) void remote.setStation({ anchor: s.anchor, liked: [], disliked: [] });
+      });
+    } else {
+      autoPlay.setStation({ anchor: autoPlay.stationState().anchor, liked: [], disliked: [] });
+    }
+  }
+
+  /**
+   * Start a radio: `first` plays now, and auto-play carries on from a station built on it and on
+   * `context` - the album, playlist or catalogue it was started from.
+   */
+  async function startStation(first: Track, context: Track[] = []): Promise<void> {
+    const anchor = [...new Set([first.id, ...context.map((t) => t.id)])];
+    if (remote.isActive) {
+      await remote.startStation(first, { anchor, liked: [], disliked: [] });
+      return;
+    }
+    autoPlay.setQueueSource(null);
+    local.play(first, [first]);
+    autoPlay.resetStation(anchor);
+    autoPlay.setEnabled(true);
+  }
 
   // ---- Remote surface ----
 
@@ -215,6 +280,12 @@ export const usePlaybackStore = defineStore('playback', () => {
 
     await remote.activate(device, takeOver);
     if (tracks.length > 0) await remote.adopt(tracks, index, position, wasPlaying);
+    // The station goes with the queue - `adopt` reset the session's to the bare queue.
+    if (tracks.length > 0) {
+      try {
+        await remote.setStation(autoPlay.stationState());
+      } catch { /* the queue made it; a station that did not is only a weaker seed */ }
+    }
     // The queue moved to the speaker; endless play is part of the queue as far as the listener is
     // concerned, so it moves with it rather than switching itself off at the handover.
     if (autoPlay.enabled && !remote.autoPlay) remote.setAutoPlay(true);
@@ -239,6 +310,7 @@ export const usePlaybackStore = defineStore('playback', () => {
     const position = remote.currentTime;
     const wasPlaying = remote.isPlaying;
     const wasAutoPlaying = remote.autoPlay;
+    const station = await remote.getStation();
 
     await remote.deactivate();
 
@@ -250,6 +322,8 @@ export const usePlaybackStore = defineStore('playback', () => {
     if (!resume) return;
 
     local.play(resume, tracks);
+    // After the queue, which would otherwise be all the station knew about.
+    if (station) autoPlay.setStation(station);
     whenLocalElementLive(() => {
       if (position > 1) local.seek(position);
       if (!wasPlaying) local.pause();
@@ -320,6 +394,13 @@ export const usePlaybackStore = defineStore('playback', () => {
     setAutoPlay,
     toggleAutoPlay,
     isAutoPlayTrack,
+    currentVote,
+    stationLiked,
+    stationDisliked,
+    steer,
+    undoDoesNotFit,
+    resetVotes,
+    startStation,
 
     // remote
     isRemote,

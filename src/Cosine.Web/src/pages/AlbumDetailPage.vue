@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { Play, Shuffle, ListPlus, ListEnd, User, Heart, MoreHorizontal } from 'lucide-vue-next';
+import { Play, Shuffle, Radio, ListPlus, ListEnd, User, Heart, MoreHorizontal } from 'lucide-vue-next';
 import { getAlbum } from '@/api/browsing';
 import { useFavoritesStore } from '@/stores/favorites';
 import { usePlayback } from '@/composables/usePlayback';
+import { useRadio } from '@/composables/useRadio';
 import PageHeader from '@/components/ui/PageHeader.vue';
 import TrackRow from '@/components/TrackRow.vue';
 import TrackList from '@/components/TrackList.vue';
@@ -22,6 +23,7 @@ const props = defineProps<{ id: string }>();
 const router = useRouter();
 const favorites = useFavoritesStore();
 const { playTracks, queueTracks } = usePlayback();
+const radio = useRadio();
 
 const album = ref<AlbumDetail | null>(null);
 const loading = ref(true);
@@ -120,6 +122,14 @@ watch(() => props.id, load);
           @click="play(true)"
         >
           <Shuffle :size="18" :stroke-width="2" /> Shuffle
+        </button>
+        <button
+          type="button"
+          class="flex items-center gap-2 rounded-control border border-border px-4 py-2.5 font-medium text-text transition-colors hover:bg-surface-2"
+          title="A random track from this album, then more like it"
+          @click="radio.fromTracks(tracks, album.name)"
+        >
+          <Radio :size="18" :stroke-width="2" /> Radio
         </button>
         <div class="rounded-control border border-border p-1.5">
           <FavoriteButton :active="isFav" :size="20" @toggle="favorites.toggle('album', album.id, album.name)" />
