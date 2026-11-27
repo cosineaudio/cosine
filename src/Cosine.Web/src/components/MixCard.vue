@@ -47,8 +47,8 @@ const menuItems = computed<MenuItem[]>(() => [
           :style="{ background: `linear-gradient(to top, ${wash} 0%, color-mix(in srgb, ${wash} 55%, transparent) 38%, transparent 70%)` }"
         />
         <span class="pointer-events-none absolute inset-x-0 bottom-0 h-1.5" :style="{ background: wash }" />
-        <span class="pointer-events-none absolute left-3 top-3 flex items-center gap-1 rounded-full bg-black/45 px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-white backdrop-blur">
-          <Radio :size="11" :stroke-width="2.5" /> Mix
+        <span class="pointer-events-none absolute left-2 top-2 flex items-center gap-1 rounded-full bg-accent/90 px-2 py-0.5 text-[11px] font-medium text-accent-ink backdrop-blur">
+          <Radio :size="12" :stroke-width="2.5" /> Mix
         </span>
         <span class="pointer-events-none absolute inset-x-3 bottom-4 text-left font-display font-bold leading-[0.95] tracking-tight text-white [text-shadow:0_1px_12px_rgb(0_0_0_/_0.45)]">
           <span class="line-clamp-2 block text-2xl">{{ artist.name }}</span>

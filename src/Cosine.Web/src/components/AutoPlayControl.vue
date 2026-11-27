@@ -49,25 +49,32 @@ function doesNotFit(): void {
 </script>
 
 <template>
+  <!-- The pill is always there; while auto-play is off its border is transparent and the vote
+       buttons are collapsed to nothing, so switching it on grows them out of the ∞ rather than
+       popping them in - and the transport row slides instead of jumping. -->
   <div
-    class="flex items-center transition-colors"
-    :class="steering ? 'gap-1 rounded-full border border-border px-1 py-0.5' : ''"
+    class="flex items-center rounded-full border transition-[border-color,padding,gap] duration-200 ease-out motion-reduce:transition-none"
+    :class="steering ? 'gap-1 border-border px-1 py-0.5' : 'gap-0 border-transparent px-0 py-0.5'"
   >
     <button
-      v-if="steering"
       type="button"
-      class="grid place-items-center rounded-full transition-colors disabled:opacity-30"
+      class="grid shrink-0 place-items-center overflow-hidden rounded-full transition-[max-width,opacity,transform,background-color,color] duration-200 ease-out motion-reduce:transition-none"
       :class="[
-        size === 'lg' ? 'h-8 w-8' : 'h-6 w-6',
+        size === 'lg' ? 'h-8' : 'h-6',
+        steering
+          ? (size === 'lg' ? 'w-8 max-w-8' : 'w-6 max-w-6') + ' scale-100 opacity-100 disabled:opacity-30'
+          : 'pointer-events-none max-w-0 scale-50 opacity-0',
         player.currentVote === -1 ? 'bg-text text-surface' : 'text-muted hover:text-text',
       ]"
-      :disabled="!canVote"
+      :disabled="!steering || !canVote"
+      :tabindex="steering ? 0 : -1"
+      :aria-hidden="!steering"
       aria-label="Doesn't fit - steer auto-play away and skip"
       :aria-pressed="player.currentVote === -1"
       title="Doesn't fit - skip it and steer away from it"
       @click="doesNotFit"
     >
-      <Minus :size="voteSize" :stroke-width="2.5" />
+      <Minus :size="voteSize" :stroke-width="2.5" class="shrink-0" />
     </button>
     <button
       type="button"
@@ -84,20 +91,24 @@ function doesNotFit(): void {
       <InfinityIcon :size="iconSize" :stroke-width="2" />
     </button>
     <button
-      v-if="steering"
       type="button"
-      class="grid place-items-center rounded-full transition-colors disabled:opacity-30"
+      class="grid shrink-0 place-items-center overflow-hidden rounded-full transition-[max-width,opacity,transform,background-color,color] duration-200 ease-out motion-reduce:transition-none"
       :class="[
-        size === 'lg' ? 'h-8 w-8' : 'h-6 w-6',
+        size === 'lg' ? 'h-8' : 'h-6',
+        steering
+          ? (size === 'lg' ? 'w-8 max-w-8' : 'w-6 max-w-6') + ' scale-100 opacity-100 disabled:opacity-30'
+          : 'pointer-events-none max-w-0 scale-50 opacity-0',
         player.currentVote === 1 ? 'bg-accent text-accent-ink' : 'text-muted hover:text-text',
       ]"
-      :disabled="!canVote"
+      :disabled="!steering || !canVote"
+      :tabindex="steering ? 0 : -1"
+      :aria-hidden="!steering"
       aria-label="Fits - steer auto-play toward this"
       :aria-pressed="player.currentVote === 1"
       title="Fits - more like this"
       @click="fits"
     >
-      <Plus :size="voteSize" :stroke-width="2.5" />
+      <Plus :size="voteSize" :stroke-width="2.5" class="shrink-0" />
     </button>
   </div>
 </template>
