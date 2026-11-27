@@ -103,7 +103,19 @@ public record PlaybackStateSnapshot(
     Guid OwnerUserId,
     string OwnerUsername,
     DateTimeOffset ServerTimestamp,
-    bool AutoPlay = false);
+    bool AutoPlay = false,
+    int StationLiked = 0,
+    int StationDisliked = 0,
+    int CurrentVote = 0);
+
+/// <summary>
+/// What a session's auto-play steers by, carried across a handover between the browser and a
+/// speaker so the station survives the move.
+/// </summary>
+public record AutoPlayStationState(
+    IReadOnlyList<Guid> Anchor,
+    IReadOnlyList<Guid> Liked,
+    IReadOnlyList<Guid> Disliked);
 
 /// <param name="QueueVersion">Matches the version in the state snapshot that follows it.</param>
 public record PlaybackQueueSnapshot(

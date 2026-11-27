@@ -55,6 +55,22 @@ public sealed class StubAudioSimilarityService : IAudioSimilarityService
         return Task.FromResult(result);
     }
 
+    /// <summary>Records the last steered call's avoid list.</summary>
+    public IReadOnlyCollection<Guid>? LastAvoided { get; private set; }
+
+    public Task<IReadOnlyList<(Guid TrackId, double Score)>> GetSteeredTracksAsync(
+        IReadOnlyDictionary<Guid, double> seeds,
+        IReadOnlyCollection<Guid> avoid,
+        IReadOnlyCollection<Guid> excludeTrackIds,
+        int count,
+        CancellationToken ct = default)
+    {
+        LastAvoided = avoid;
+        var excluded = new HashSet<Guid>(excludeTrackIds);
+        excluded.UnionWith(avoid);
+        return GetSimilarTracksAsync([.. seeds.Keys], excluded, count, ct);
+    }
+
     public Task<IReadOnlyDictionary<Guid, double>> GetArtistAudioScoresAsync(
         Guid seedArtistId,
         IReadOnlyCollection<Guid> candidateArtistIds,

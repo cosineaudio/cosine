@@ -45,6 +45,7 @@ function play() {
 const menuItems = useTrackMenu(() => props.track, {
   play,
   extra: () => props.menuExtra ?? [],
+  context: () => props.queue ?? [],
 });
 </script>
 

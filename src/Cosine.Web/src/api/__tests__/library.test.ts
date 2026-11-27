@@ -58,6 +58,10 @@ describe('library api', () => {
         seedTrackIds: ['t-1'],
         excludeTrackIds: ['t-2', 't-3'],
         count: 5,
+        anchorTrackIds: [],
+        likedTrackIds: [],
+        dislikedTrackIds: [],
+        autoPlayedTrackIds: [],
       })
 
       expect(songs.map((s) => s.id)).toEqual(['t-9'])
@@ -68,6 +72,10 @@ describe('library api', () => {
         seedTrackIds: ['t-1'],
         excludeTrackIds: ['t-2', 't-3'],
         count: 5,
+        anchorTrackIds: [],
+        likedTrackIds: [],
+        dislikedTrackIds: [],
+        autoPlayedTrackIds: [],
       })
     })
   })

@@ -143,4 +143,30 @@ public class PlaybackController(IPlaybackSessionManager manager) : ControllerBas
     public async Task<ActionResult<PlaybackStateSnapshot>> SetAutoPlay(
         Guid id, [FromBody] AutoPlayRequest request, CancellationToken ct) =>
         Ok(await manager.SetAutoPlayAsync(id, Caller, request.Enabled, ct));
+
+    [HttpGet("sessions/{id:guid}/autoplay/station")]
+    public ActionResult<AutoPlayStationState> GetStation(Guid id) =>
+        manager.TryGetStation(id) is { } station ? Ok(station) : NotFound();
+
+    /// <summary>
+    /// Replace what auto-play steers by - a radio started from an album or playlist, or the
+    /// browser's station handed over with the queue.
+    /// </summary>
+    [HttpPut("sessions/{id:guid}/autoplay/station")]
+    public async Task<ActionResult<PlaybackStateSnapshot>> SetStation(
+        Guid id, [FromBody] AutoPlayStationState request, CancellationToken ct) =>
+        Ok(await manager.SetStationAsync(id, Caller, request with
+        {
+            Anchor = request.Anchor ?? [],
+            Liked = request.Liked ?? [],
+            Disliked = request.Disliked ?? [],
+        }, ct));
+
+    public record VoteRequest(Guid TrackId, int Vote);
+
+    /// <summary>"+" / "−" / clear for a track on the session's auto-play station.</summary>
+    [HttpPost("sessions/{id:guid}/autoplay/vote")]
+    public async Task<ActionResult<PlaybackStateSnapshot>> Vote(
+        Guid id, [FromBody] VoteRequest request, CancellationToken ct) =>
+        Ok(await manager.VoteAsync(id, Caller, request.TrackId, Math.Sign(request.Vote), ct));
 }

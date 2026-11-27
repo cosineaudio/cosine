@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { ref, computed, watch } from 'vue';
 import type { Track } from '@/api/types';
 import { getArtistSongs, getAutoPlayQueue } from '@/api/library';
+import type { AutoPlayStationState } from '@/api/playback';
 import { getSongsByGenre } from '@/api/lists';
 import { getRecentTracks } from '@/lib/recentTracks';
 import { shuffled } from '@/lib/shuffle';
@@ -45,6 +46,10 @@ export type QueueSource =
  */
 
 const ENABLED_KEY = 'cosine_autoplay';
+const STATION_KEY = 'cosine_autoplay_station';
+
+/** Most anchor tracks kept. The server samples it down further; this only bounds storage. */
+const ANCHOR_LIMIT = 500;
 
 /**
  * How few tracks may be left ahead of the playing one before more are fetched. Topping up early
@@ -100,6 +105,132 @@ export const useAutoPlayStore = defineStore('autoPlay', () => {
 
   /** The artist catalogue currently being read through, held between batches. */
   let catalogue: { artistId: string; tracks: Track[] } | null = null;
+
+  // ---- Station ----
+  //
+  // What auto-play steers by. Seeding from recent plays alone let a playlist be represented by
+  // its last few tracks, and then by auto-play's own picks. The anchor is the listener's own
+  // choice - the queue they started and anything they queued by hand - and the votes are their
+  // "+" / "−" along the way. All of it resets when a new queue is played.
+
+  const savedStation = loadStation();
+  const anchor = ref<string[]>(savedStation.anchor);
+  const liked = ref<Set<string>>(new Set(savedStation.liked));
+  const disliked = ref<Set<string>>(new Set(savedStation.disliked));
+
+  /**
+   * Bumped whenever what is queued stops matching the station - a vote, a new station. A batch
+   * that was in flight across a bump was asked for the old station and is thrown away.
+   */
+  let generation = 0;
+
+  function loadStation(): AutoPlayStationState {
+    try {
+      const raw = localStorage.getItem(STATION_KEY);
+      const parsed = raw ? JSON.parse(raw) : null;
+      if (parsed && Array.isArray(parsed.anchor)) {
+        return {
+          anchor: parsed.anchor,
+          liked: Array.isArray(parsed.liked) ? parsed.liked : [],
+          disliked: Array.isArray(parsed.disliked) ? parsed.disliked : [],
+        };
+      }
+    } catch { /* unreadable - start without one */ }
+    return { anchor: [], liked: [], disliked: [] };
+  }
+
+  function stationState(): AutoPlayStationState {
+    return { anchor: [...anchor.value], liked: [...liked.value], disliked: [...disliked.value] };
+  }
+
+  watch([anchor, liked, disliked], () => {
+    try {
+      localStorage.setItem(STATION_KEY, JSON.stringify(stationState()));
+    } catch { /* storage unavailable - the station still works for this session */ }
+  });
+
+  function capAnchor(ids: string[]): string[] {
+    const unique = [...new Set(ids)];
+    return unique.length > ANCHOR_LIMIT ? unique.slice(unique.length - ANCHOR_LIMIT) : unique;
+  }
+
+  /** A new queue is a new station: what was just chosen is what it steers by. */
+  function resetStation(anchorIds: string[]): void {
+    anchor.value = capAnchor(anchorIds);
+    liked.value = new Set();
+    disliked.value = new Set();
+    generation++;
+  }
+
+  /** Tracks queued by hand join the anchor - they are the listener saying what they want. */
+  function addToAnchor(ids: string[]): void {
+    anchor.value = capAnchor([...anchor.value, ...ids]);
+  }
+
+  /** Take over a station wholesale - one handed back from a speaker - and re-steer by it. */
+  function setStation(next: AutoPlayStationState): void {
+    anchor.value = capAnchor(next.anchor);
+    liked.value = new Set(next.liked);
+    disliked.value = new Set(next.disliked.filter((id) => !next.liked.includes(id)));
+    void refresh();
+  }
+
+  /** 1 "+", -1 "−", 0 neither. */
+  function voteOf(trackId: string | null): -1 | 0 | 1 {
+    if (!trackId) return 0;
+    if (liked.value.has(trackId)) return 1;
+    if (disliked.value.has(trackId)) return -1;
+    return 0;
+  }
+
+  const currentVote = computed(() => voteOf(player.currentTrackId));
+  const likedCount = computed(() => liked.value.size);
+  const dislikedCount = computed(() => disliked.value.size);
+
+  /**
+   * "+" / "−" / clear for a track. What auto-play had queued but not yet played was chosen
+   * without this vote, so it is replaced; "−" on the playing track also skips it once the
+   * replacement is in, so the next thing heard is already steered.
+   */
+  async function vote(trackId: string, value: -1 | 0 | 1): Promise<void> {
+    const nextLiked = new Set(liked.value);
+    const nextDisliked = new Set(disliked.value);
+    nextLiked.delete(trackId);
+    nextDisliked.delete(trackId);
+    if (value > 0) nextLiked.add(trackId);
+    if (value < 0) nextDisliked.add(trackId);
+    liked.value = nextLiked;
+    disliked.value = nextDisliked;
+
+    if (!enabled.value || remote.isActive) return;
+    await refresh();
+    if (value < 0 && player.currentTrackId === trackId) player.next();
+  }
+
+  /**
+   * Drop what auto-play queued and has not played, and fetch afresh. Matched by "not heard yet"
+   * rather than by position, because under shuffle the entries after the index are not the ones
+   * still to come. Anything the listener queued stays exactly where it is.
+   */
+  async function refresh(): Promise<void> {
+    generation++;
+    if (remote.isActive) return;
+
+    const heard = new Set(getRecentTracks().map((t) => t.id));
+    for (let i = player.queue.length - 1; i >= 0; i--) {
+      if (i === player.queueIndex) continue;
+      const id = player.queue[i]?.id;
+      if (!id || !addedIds.value.has(id) || heard.has(id)) continue;
+      player.removeFromQueue(i);
+      addedIds.value.delete(id);
+    }
+
+    // Steering is the listener taking over from wherever the queue came from.
+    source.value = null;
+    lastAttemptTrackId = null;
+    loading.value = false;
+    await maybeTopUp();
+  }
 
   function loadEnabled(): boolean {
     try {
@@ -172,8 +303,11 @@ export const useAutoPlayStore = defineStore('autoPlay', () => {
     lastAttemptTrackId = player.currentTrackId;
     loading.value = true;
     const resume = stoppedAtTheEnd();
+    const asked = generation;
     try {
-      const tracks = await fetchBatch();
+      const tracks = (await fetchBatch()).filter((t) => !disliked.value.has(t.id));
+      // Asked for a station that has since been steered; the refresh that bumped it fetches anew.
+      if (asked !== generation) return;
       if (tracks.length === 0) {
         error.value = 'Auto-play could not find anything else to play';
         return;
@@ -190,9 +324,9 @@ export const useAutoPlayStore = defineStore('autoPlay', () => {
 
       trimHistory();
     } catch {
-      error.value = 'Auto-play could not reach the server';
+      if (asked === generation) error.value = 'Auto-play could not reach the server';
     } finally {
-      loading.value = false;
+      if (asked === generation) loading.value = false;
     }
   }
 
@@ -278,11 +412,21 @@ export const useAutoPlayStore = defineStore('autoPlay', () => {
     const recent = getRecentTracks().map((t) => t.id);
     const current = player.currentTrack?.id;
     const seeds = [...new Set([...(current ? [current] : []), ...recent])].slice(0, SEED_COUNT);
-    if (seeds.length === 0) return [];
+    if (seeds.length === 0 && anchor.value.length === 0 && liked.value.size === 0) return [];
 
-    const exclude = [...new Set([...player.queue.map((t) => t.id), ...recent])];
+    const exclude = [...new Set([
+      ...player.queue.map((t) => t.id), ...recent, ...disliked.value,
+    ])];
 
-    return getAutoPlayQueue({ seedTrackIds: seeds, excludeTrackIds: exclude, count: BATCH_SIZE });
+    return getAutoPlayQueue({
+      seedTrackIds: seeds,
+      excludeTrackIds: exclude,
+      count: BATCH_SIZE,
+      anchorTrackIds: anchor.value,
+      likedTrackIds: [...liked.value],
+      dislikedTrackIds: [...disliked.value],
+      autoPlayedTrackIds: [...addedIds.value],
+    });
   }
 
   /**
@@ -325,5 +469,16 @@ export const useAutoPlayStore = defineStore('autoPlay', () => {
     queueSource: source,
     /** Exposed for the facade, which hands a speaker's queue over with the setting intact. */
     maybeTopUp,
+
+    // station
+    currentVote,
+    likedCount,
+    dislikedCount,
+    voteOf,
+    vote,
+    resetStation,
+    addToAnchor,
+    setStation,
+    stationState,
   };
 });

@@ -2,7 +2,8 @@
 import { ref, computed, watch, onMounted } from 'vue';
 import { toast } from 'vue-sonner';
 import { Play, Shuffle, Radio } from 'lucide-vue-next';
-import { getArtist, getArtistInfo2, getTopSongs, getSimilarSongs2 } from '@/api/browsing';
+import { getArtist, getArtistInfo2, getTopSongs } from '@/api/browsing';
+import { useRadio } from '@/composables/useRadio';
 import { getArtistSongs } from '@/api/library';
 import { useFavoritesStore } from '@/stores/favorites';
 import { usePlayback } from '@/composables/usePlayback';
@@ -37,7 +38,8 @@ const allSongs = ref<Track[]>([]);
 const loading = ref(true);
 const showSkeleton = useDeferredLoading(loading);
 const showFullBio = ref(false);
-const radioLoading = ref(false);
+const radio = useRadio();
+const radioLoading = radio.pending;
 /** Which of Play/Shuffle is fetching, so only that button shows as busy. */
 const queueLoading = ref<'play' | 'shuffle' | null>(null);
 
@@ -115,23 +117,11 @@ async function playAll(shuffle = false) {
   }
 }
 
-/** Build an endless-ish radio queue from this artist and similar artists. */
-async function startRadio() {
-  if (!artist.value || radioLoading.value) return;
-  radioLoading.value = true;
-  try {
-    const tracks = await getSimilarSongs2(artist.value.id, 100);
-    if (tracks.length === 0) {
-      toast.error('Not enough library data to build a radio yet');
-      return;
-    }
-    playTracks(tracks, 0);
-    toast.success(`Radio started from ${artist.value.name}`);
-  } catch {
-    toast.error('Could not start radio');
-  } finally {
-    radioLoading.value = false;
-  }
+/** A radio from this artist: a random song of theirs first, the station anchored on the catalogue. */
+function startRadio() {
+  const a = artist.value;
+  if (!a) return;
+  void radio.fromTracks(() => getArtistSongs(a.id), a.name);
 }
 
 onMounted(load);

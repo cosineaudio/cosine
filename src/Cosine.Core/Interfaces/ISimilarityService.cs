@@ -54,5 +54,17 @@ public interface ISimilarityService
         IReadOnlyList<Guid> seedTrackIds,
         IReadOnlyCollection<Guid> excludeTrackIds,
         int count,
+        CancellationToken ct = default)
+        => GetAutoPlayQueueAsync(AutoPlayStation.FromRecent(seedTrackIds), excludeTrackIds, count, ct);
+
+    /// <summary>
+    /// The next stretch of a steered queue: seeded from the whole <paramref name="station"/> - its
+    /// anchor, recent plays and the listener's +/− votes - rather than from recent plays alone.
+    /// Disliked tracks are never returned, and their artists and sound are steered away from.
+    /// </summary>
+    Task<IReadOnlyList<Track>> GetAutoPlayQueueAsync(
+        AutoPlayStation station,
+        IReadOnlyCollection<Guid> excludeTrackIds,
+        int count,
         CancellationToken ct = default);
 }

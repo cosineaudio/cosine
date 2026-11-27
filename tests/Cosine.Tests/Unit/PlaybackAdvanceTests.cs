@@ -139,13 +139,16 @@ public class PlaybackAdvanceTests
     private sealed class StubSimilarity(CosineDbContext db) : ISimilarityService
     {
         public List<IReadOnlyList<Guid>> Seeds { get; } = [];
+        public List<AutoPlayStation> Stations { get; } = [];
 
         public Task<IReadOnlyList<Track>> GetAutoPlayQueueAsync(
-            IReadOnlyList<Guid> seedTrackIds, IReadOnlyCollection<Guid> excludeTrackIds, int count,
+            AutoPlayStation station, IReadOnlyCollection<Guid> excludeTrackIds, int count,
             CancellationToken ct = default)
         {
-            Seeds.Add([.. seedTrackIds]);
+            Seeds.Add([.. station.Recent]);
+            Stations.Add(station);
             var excluded = excludeTrackIds.ToHashSet();
+            excluded.UnionWith(station.DislikedOrEmpty);
             IReadOnlyList<Track> batch =
                 [.. db.Tracks.Where(t => !excluded.Contains(t.Id)).Take(count)];
             return Task.FromResult(batch);
@@ -616,6 +619,54 @@ public class PlaybackAdvanceTests
 
         Assert.All(items.Take(2), i => Assert.False(i.AutoPlay));
         Assert.Contains(items, i => i.AutoPlay);
+    }
+
+    [Fact]
+    public async Task TheQueueTheListenerStarted_IsTheStationsAnchor()
+    {
+        var harness = await BuildAsync(trackCount: 3, libraryExtra: 5);
+        var queued = harness.Manager.TryGetQueue(harness.SessionId)!.Items.Select(i => i.TrackId);
+
+        Assert.Equal(queued, harness.Manager.TryGetStation(harness.SessionId)!.Anchor);
+    }
+
+    /// <summary>
+    /// "−" on what is playing: it is skipped, counted, and never handed back by a later top-up.
+    /// Only auto-play's own entries are replaced; the listener's queue stays as it was.
+    /// </summary>
+    [Fact]
+    public async Task DislikingThePlayingTrack_SkipsIt_AndItDoesNotComeBack()
+    {
+        var harness = await BuildAsync(trackCount: 2, libraryExtra: 8);
+        await harness.Manager.SetAutoPlayAsync(harness.SessionId, harness.Caller, true, default);
+        await harness.SettleAsync();
+
+        var items = harness.Manager.TryGetQueue(harness.SessionId)!.Items;
+        var own = items.Where(i => !i.AutoPlay).Select(i => i.TrackId).ToList();
+        var playing = harness.Manager.TryGetState(harness.SessionId)!.CurrentTrackId!.Value;
+
+        var state = await harness.Manager.VoteAsync(harness.SessionId, harness.Caller, playing, -1, default);
+        await harness.SettleAsync();
+
+        Assert.NotEqual(playing, state.CurrentTrackId);
+        Assert.Equal(1, state.StationDisliked);
+        var after = harness.Manager.TryGetQueue(harness.SessionId)!.Items;
+        Assert.All(own, id => Assert.Contains(after, i => i.TrackId == id));
+        Assert.Single(after, i => i.TrackId == playing);
+    }
+
+    [Fact]
+    public async Task LikingThePlayingTrack_IsReportedOnTheState()
+    {
+        var harness = await BuildAsync(trackCount: 2, libraryExtra: 4);
+        await harness.Manager.SetAutoPlayAsync(harness.SessionId, harness.Caller, true, default);
+        var playing = harness.Manager.TryGetState(harness.SessionId)!.CurrentTrackId!.Value;
+
+        var state = await harness.Manager.VoteAsync(harness.SessionId, harness.Caller, playing, 1, default);
+
+        Assert.Equal(1, state.CurrentVote);
+        Assert.Equal(1, state.StationLiked);
+        Assert.Equal(playing, state.CurrentTrackId);
     }
 
     /// <summary>

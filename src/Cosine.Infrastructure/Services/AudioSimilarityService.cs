@@ -35,34 +35,62 @@ public sealed class AudioSimilarityService : IAudioSimilarityService
     public async Task<bool> IsAvailableAsync(CancellationToken ct = default)
         => _vectors.IsAvailable && await _db.TrackAudioFeatures.AnyAsync(f => f.Normalized != null, ct);
 
-    public async Task<IReadOnlyList<(Guid TrackId, double Score)>> GetSimilarTracksAsync(
+    public Task<IReadOnlyList<(Guid TrackId, double Score)>> GetSimilarTracksAsync(
         IReadOnlyList<Guid> seedTrackIds,
         IReadOnlyCollection<Guid> excludeTrackIds,
         int count,
         CancellationToken ct = default)
     {
-        if (!_vectors.IsAvailable || seedTrackIds.Count == 0) return [];
-        count = Math.Clamp(count, 1, 500);
-
-        var seeds = await _db.TrackAudioFeatures
-            .AsNoTracking()
-            .Where(f => seedTrackIds.Contains(f.TrackId) && f.Normalized != null)
-            .Select(f => new { f.TrackId, f.Normalized, f.DistanceMean, f.DistanceStdDev })
-            .ToListAsync(ct);
-
-        if (seeds.Count == 0) return [];
-
         // Recency weights follow the seed order the caller promised: 1, 1/2, 1/3 ...
         var weights = new Dictionary<Guid, double>();
         for (var i = 0; i < seedTrackIds.Count; i++)
             weights.TryAdd(seedTrackIds[i], 1.0 / (i + 1));
 
+        return GetSteeredTracksAsync(weights, [], excludeTrackIds, count, ct);
+    }
+
+    /// <summary>
+    /// How far the query point is pushed away from the disliked tracks, as a fraction of the
+    /// distance between the liked and disliked centroids (Rocchio's β). Small: the point is to
+    /// lean away, not to land somewhere none of the seeds are.
+    /// </summary>
+    private const double AvoidPush = 0.35;
+
+    /// <summary>Most seeds loaded per query. The heaviest are kept; the tail barely moves a centroid.</summary>
+    private const int MaxSeeds = 80;
+
+    public async Task<IReadOnlyList<(Guid TrackId, double Score)>> GetSteeredTracksAsync(
+        IReadOnlyDictionary<Guid, double> seeds,
+        IReadOnlyCollection<Guid> avoid,
+        IReadOnlyCollection<Guid> excludeTrackIds,
+        int count,
+        CancellationToken ct = default)
+    {
+        if (!_vectors.IsAvailable || seeds.Count == 0) return [];
+        count = Math.Clamp(count, 1, 500);
+
+        var seedIds = seeds
+            .Where(s => s.Value > 0)
+            .OrderByDescending(s => s.Value)
+            .Take(MaxSeeds)
+            .Select(s => s.Key)
+            .ToList();
+        if (seedIds.Count == 0) return [];
+
+        var seedRows = await _db.TrackAudioFeatures
+            .AsNoTracking()
+            .Where(f => seedIds.Contains(f.TrackId) && f.Normalized != null)
+            .Select(f => new { f.TrackId, f.Normalized, f.DistanceMean, f.DistanceStdDev })
+            .ToListAsync(ct);
+
+        if (seedRows.Count == 0) return [];
+
         var centroid = new double[FeatureLayout.Dimensions];
         double totalWeight = 0, queryMean = 0, queryStdDev = 0;
 
-        foreach (var seed in seeds)
+        foreach (var seed in seedRows)
         {
-            var weight = weights.GetValueOrDefault(seed.TrackId, 1.0);
+            var weight = seeds.GetValueOrDefault(seed.TrackId, 1.0);
             var vector = seed.Normalized!.ToArray();
 
             for (var i = 0; i < centroid.Length; i++) centroid[i] += vector[i] * weight;
@@ -78,10 +106,33 @@ public sealed class AudioSimilarityService : IAudioSimilarityService
 
         if (totalWeight <= 0) return [];
 
-        var query = new float[FeatureLayout.Dimensions];
-        for (var i = 0; i < query.Length; i++) query[i] = (float)(centroid[i] / totalWeight);
+        for (var i = 0; i < centroid.Length; i++) centroid[i] /= totalWeight;
         queryMean /= totalWeight;
         queryStdDev /= totalWeight;
+
+        var avoidIds = avoid.Distinct().Take(MaxSeeds).ToList();
+        var avoidVectors = avoidIds.Count == 0
+            ? []
+            : (await _db.TrackAudioFeatures
+                .AsNoTracking()
+                .Where(f => avoidIds.Contains(f.TrackId) && f.Normalized != null)
+                .Select(f => f.Normalized)
+                .ToListAsync(ct))
+                .Select(v => v!.ToArray())
+                .ToList();
+
+        // Rocchio: lean away from the disliked centroid, along the line joining the two.
+        if (avoidVectors.Count > 0)
+        {
+            var avoidCentroid = new double[centroid.Length];
+            foreach (var v in avoidVectors)
+                for (var i = 0; i < avoidCentroid.Length; i++) avoidCentroid[i] += v[i];
+            for (var i = 0; i < centroid.Length; i++)
+                centroid[i] += AvoidPush * (centroid[i] - avoidCentroid[i] / avoidVectors.Count);
+        }
+
+        var query = new float[FeatureLayout.Dimensions];
+        for (var i = 0; i < query.Length; i++) query[i] = (float)centroid[i];
 
         var hasQueryStats = queryStdDev > 0;
         var probe = new Vector(query);
@@ -89,11 +140,14 @@ public sealed class AudioSimilarityService : IAudioSimilarityService
         // Exclusions are applied after retrieval rather than as a SQL IN clause: the caller's
         // exclusion list is its entire queue, and a parameter list that long is a failure waiting
         // to happen. Over-fetching covers what gets dropped.
-        var excluded = excludeTrackIds as HashSet<Guid> ?? [.. excludeTrackIds];
+        var excluded = new HashSet<Guid>(excludeTrackIds);
+        excluded.UnionWith(seedIds);
+        excluded.UnionWith(avoidIds);
         var take = Math.Clamp(
-            count * CandidateOverfetch + excluded.Count + seedTrackIds.Count,
+            count * CandidateOverfetch + excluded.Count,
             MinCandidates, MaxCandidates);
 
+        var wantVectors = avoidVectors.Count > 0;
         var candidates = await _db.TrackAudioFeatures
             .AsNoTracking()
             .Where(f => f.Normalized != null)
@@ -105,13 +159,15 @@ public sealed class AudioSimilarityService : IAudioSimilarityService
                 Distance = f.Normalized!.L2Distance(probe),
                 f.DistanceMean,
                 f.DistanceStdDev,
+                // Only needed to test against the disliked tracks; skipped otherwise.
+                Vector = wantVectors ? f.Normalized : null,
             })
             .ToListAsync(ct);
 
-        var seedSet = seedTrackIds as HashSet<Guid> ?? [.. seedTrackIds];
-
         return candidates
-            .Where(c => !excluded.Contains(c.TrackId) && !seedSet.Contains(c.TrackId))
+            .Where(c => !excluded.Contains(c.TrackId))
+            // Nearer to something the listener rejected than to what they asked for.
+            .Where(c => c.Vector is null || !CloserToAvoided(c.Vector.ToArray(), c.Distance, avoidVectors))
             .Select(c => (
                 c.TrackId,
                 Score: MutualProximity.Score(
@@ -123,6 +179,22 @@ public sealed class AudioSimilarityService : IAudioSimilarityService
             .OrderByDescending(c => c.Score)
             .Take(count)
             .ToList();
+    }
+
+    private static bool CloserToAvoided(float[] candidate, double distanceToQuery, List<float[]> avoided)
+    {
+        var limit = distanceToQuery * distanceToQuery;
+        foreach (var v in avoided)
+        {
+            double sum = 0;
+            for (var i = 0; i < candidate.Length && sum < limit; i++)
+            {
+                var d = candidate[i] - v[i];
+                sum += d * d;
+            }
+            if (sum < limit) return true;
+        }
+        return false;
     }
 
     public async Task<IReadOnlyDictionary<Guid, double>> GetArtistAudioScoresAsync(

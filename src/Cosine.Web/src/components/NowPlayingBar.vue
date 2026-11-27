@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import {
-  Shuffle, SkipBack, SkipForward, Repeat, Repeat1, Infinity as InfinityIcon,
+  Shuffle, SkipBack, SkipForward, Repeat, Repeat1,
   Volume2, Volume1, VolumeX, ListMusic, Maximize2, Check, MoreHorizontal, Play, Pause,
 } from 'lucide-vue-next';
 import { usePlaybackStore } from '@/stores/playback';
@@ -20,6 +20,7 @@ import { useDeferredLoading } from '@/composables/useDeferredLoading';
 import { useTrackMenu } from '@/composables/useTrackMenu';
 import { formatDuration } from '@/lib/format';
 import { getTranscodeFormats, type TranscodeFormat } from '@/api/transcoding';
+import AutoPlayControl from '@/components/AutoPlayControl.vue';
 
 const router = useRouter();
 const player = usePlaybackStore();
@@ -115,15 +116,6 @@ function goToAlbum() {
 }
 const repeatActive = computed(() => player.repeatMode !== 'off');
 
-// Repeat already means the queue never ends, so auto-play has nothing left to do - saying so
-// beats a toggle that looks on and quietly does nothing.
-const autoPlayTitle = computed(() => {
-  if (player.repeatMode !== 'off') return 'Auto-play - inactive while repeat is on';
-  if (!player.autoPlayEnabled) return 'Auto-play: keep the queue going with similar music';
-  return player.isRemote
-    ? `Auto-play is on - ${player.outputName} keeps going on its own`
-    : 'Auto-play is on';
-});
 </script>
 
 <template>
@@ -216,20 +208,7 @@ const autoPlayTitle = computed(() => {
             <Repeat1 v-if="player.repeatMode === 'one'" :size="17" :stroke-width="2" />
             <Repeat v-else :size="17" :stroke-width="2" />
           </button>
-          <button
-            type="button"
-            class="transition-colors"
-            :class="[
-              player.autoPlayEnabled ? 'text-accent' : 'text-muted hover:text-text',
-              player.repeatMode !== 'off' ? 'opacity-40' : '',
-            ]"
-            aria-label="Auto-play"
-            :aria-pressed="player.autoPlayEnabled"
-            :title="autoPlayTitle"
-            @click="player.toggleAutoPlay()"
-          >
-            <InfinityIcon :size="18" :stroke-width="2" />
-          </button>
+          <AutoPlayControl />
         </div>
         <div class="flex w-full items-center gap-2">
           <span class="w-10 text-right font-mono text-[11px] tabular-nums text-muted">{{ formatDuration(player.currentTime) }}</span>

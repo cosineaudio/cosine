@@ -72,6 +72,18 @@ export interface PlaybackStateSnapshot {
    * browser: a speaker is expected to keep playing after the tab that started it is closed.
    */
   autoPlay: boolean;
+  /** How many tracks are voted "+" / "−" on the session's auto-play station. */
+  stationLiked: number;
+  stationDisliked: number;
+  /** The playing track's vote: 1 "+", -1 "−", 0 none. */
+  currentVote: number;
+}
+
+/** What a session's auto-play steers by. */
+export interface AutoPlayStationState {
+  anchor: string[];
+  liked: string[];
+  disliked: string[];
 }
 
 export interface PlaybackQueueItem {
@@ -221,4 +233,18 @@ export function setShuffle(id: string, shuffled: boolean): Promise<PlaybackState
  */
 export function setAutoPlay(id: string, enabled: boolean): Promise<PlaybackStateSnapshot> {
   return client.post<PlaybackStateSnapshot>(`playback/sessions/${id}/autoplay`, { enabled });
+}
+
+export function getStation(id: string): Promise<AutoPlayStationState> {
+  return client.get<AutoPlayStationState>(`playback/sessions/${id}/autoplay/station`);
+}
+
+/** Replace what the session's auto-play steers by; it re-fetches whatever it had queued. */
+export function setStation(id: string, station: AutoPlayStationState): Promise<PlaybackStateSnapshot> {
+  return client.put<PlaybackStateSnapshot>(`playback/sessions/${id}/autoplay/station`, station);
+}
+
+/** "+" (1), "−" (-1) or clear (0) a track on the session's station. "−" on the playing track skips it. */
+export function vote(id: string, trackId: string, value: -1 | 0 | 1): Promise<PlaybackStateSnapshot> {
+  return client.post<PlaybackStateSnapshot>(`playback/sessions/${id}/autoplay/vote`, { trackId, vote: value });
 }

@@ -31,6 +31,21 @@ public interface IAudioSimilarityService
         CancellationToken ct = default);
 
     /// <summary>
+    /// Tracks that sound like the weighted <paramref name="seeds"/> and unlike
+    /// <paramref name="avoid"/>, best first. The query point is pushed away from the avoided
+    /// tracks, and a candidate that sits closer to one of them than to the query is dropped.
+    /// </summary>
+    /// <param name="seeds">Seed track ids and their weights; any order.</param>
+    /// <param name="avoid">Tracks the listener said do not fit. Also excluded.</param>
+    /// <param name="excludeTrackIds">Tracks the caller already has; also excludes the seeds.</param>
+    Task<IReadOnlyList<(Guid TrackId, double Score)>> GetSteeredTracksAsync(
+        IReadOnlyDictionary<Guid, double> seeds,
+        IReadOnlyCollection<Guid> avoid,
+        IReadOnlyCollection<Guid> excludeTrackIds,
+        int count,
+        CancellationToken ct = default);
+
+    /// <summary>
     /// How much each candidate artist sounds like the seed, as a score in [0, 1] normalized
     /// across the candidate set. Artists with no analysed tracks are absent from the result
     /// rather than scored zero - "not measured" and "measured as dissimilar" are different, and

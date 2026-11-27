@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router';
 import {
   ChevronDown, Shuffle, SkipBack, SkipForward, Repeat, Repeat1,
   ListMusic, Mic2, AudioLines, Volume2, Volume1, VolumeX,
-  PanelRightClose, PanelRightOpen, Infinity as InfinityIcon, MoreHorizontal,
+  PanelRightClose, PanelRightOpen, MoreHorizontal,
 } from 'lucide-vue-next';
 import { usePlaybackStore } from '@/stores/playback';
 import { useUiStore } from '@/stores/ui';
@@ -18,6 +18,7 @@ import NowPlayingBars from '@/components/ui/NowPlayingBars.vue';
 import Visualizer from '@/components/Visualizer.vue';
 import OutputPicker from '@/components/OutputPicker.vue';
 import QueueRow from '@/components/QueueRow.vue';
+import AutoPlayControl from '@/components/AutoPlayControl.vue';
 import ContextMenu from '@/components/ui/ContextMenu.vue';
 import { useQueueDrag } from '@/composables/useQueueDrag';
 import { useTrackMenu } from '@/composables/useTrackMenu';
@@ -455,22 +456,7 @@ function navTo(name: string, id?: string) {
                   <Repeat1 v-if="player.repeatMode === 'one'" :size="20" :stroke-width="2" />
                   <Repeat v-else :size="20" :stroke-width="2" />
                 </button>
-                <button
-                  type="button"
-                  class="transition-colors"
-                  :class="[
-                    player.autoPlayEnabled ? 'text-accent' : 'text-muted hover:text-text',
-                    player.repeatMode !== 'off' ? 'opacity-40' : '',
-                  ]"
-                  aria-label="Auto-play"
-                  :aria-pressed="player.autoPlayEnabled"
-                  :title="player.repeatMode !== 'off'
-                    ? 'Auto-play - inactive while repeat is on'
-                    : 'Auto-play: keep the queue going with similar music'"
-                  @click="player.toggleAutoPlay()"
-                >
-                  <InfinityIcon :size="21" :stroke-width="2" />
-                </button>
+                <AutoPlayControl size="lg" />
               </div>
 
               <!-- volume: mute (left), centered slider, visualizer toggle (right) -->

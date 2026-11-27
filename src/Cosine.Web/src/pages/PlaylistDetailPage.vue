@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, watch, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
 import { toast } from 'vue-sonner';
-import { Play, Shuffle, Pencil, Trash2, MoreHorizontal, Check, X, GripVertical } from 'lucide-vue-next';
+import { Play, Shuffle, Radio, Pencil, Trash2, MoreHorizontal, Check, X, GripVertical } from 'lucide-vue-next';
 import {
   getPlaylist,
   removePlaylistEntry,
@@ -12,6 +12,7 @@ import {
 } from '@/api/playlists';
 import { usePlaylistsStore } from '@/stores/playlists';
 import { usePlayback } from '@/composables/usePlayback';
+import { useRadio } from '@/composables/useRadio';
 import PageHeader from '@/components/ui/PageHeader.vue';
 import TrackRow from '@/components/TrackRow.vue';
 import ContextMenu, { type MenuItem } from '@/components/ui/ContextMenu.vue';
@@ -32,6 +33,7 @@ const { playTracks } = usePlayback();
 const playlist = ref<PlaylistDetail | null>(null);
 const entries = ref<PlaylistEntry[]>([]);
 const tracks = computed<Track[]>(() => entries.value.map((e) => e.track));
+const radio = useRadio();
 const loading = ref(true);
 const showSkeleton = useDeferredLoading(loading);
 
@@ -181,6 +183,15 @@ watch(() => props.id, load);
           @click="play(true)"
         >
           <Shuffle :size="18" :stroke-width="2" /> Shuffle
+        </button>
+        <button
+          type="button"
+          class="flex items-center gap-2 rounded-control border border-border px-4 py-2.5 font-medium text-text transition-colors hover:bg-surface-2 disabled:opacity-40"
+          :disabled="!tracks.length"
+          title="A random track from this playlist, then more like it"
+          @click="radio.fromTracks(tracks, playlist?.name)"
+        >
+          <Radio :size="18" :stroke-width="2" /> Radio
         </button>
         <ContextMenu :items="menuItems">
           <button

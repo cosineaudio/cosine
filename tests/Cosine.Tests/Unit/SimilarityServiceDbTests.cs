@@ -1,3 +1,4 @@
+using Cosine.Core.Interfaces;
 using Cosine.Core.Entities;
 using Cosine.Infrastructure.Data;
 using Cosine.Infrastructure.Services;
@@ -384,5 +385,79 @@ public class SimilarityServiceDbTests
 
         Assert.Equal(5, queue.Count);
         Assert.Equal(queue.Count, queue.Select(t => t.Id).Distinct().Count());
+    }
+
+    /// <summary>
+    /// The playlist the listener started is still what the queue is about, even after a full
+    /// recent window of auto-play picks from somewhere else.
+    /// </summary>
+    [Fact]
+    public async Task GetAutoPlayQueue_Station_AnchorKeepsTheListenersArtistInTheMix()
+    {
+        using var db = TestDbContextFactory.Create();
+        var chosen = AddArtist(db, "Chosen");
+        var drifted = AddArtist(db, "Drifted");
+
+        var playlist = Enumerable.Range(0, 6).Select(i => AddTrack(db, chosen, $"Chosen {i}")).ToList();
+        for (var i = 6; i < 12; i++) AddTrack(db, chosen, $"Chosen {i}");
+        var autoPicks = Enumerable.Range(0, 8).Select(i => AddTrack(db, drifted, $"Drifted {i}")).ToList();
+        for (var i = 8; i < 14; i++) AddTrack(db, drifted, $"Drifted {i}");
+        await db.SaveChangesAsync();
+
+        var recent = autoPicks.Select(t => t.Id).ToList();
+        var station = new AutoPlayStation(
+            recent, playlist.Select(t => t.Id).ToList(), AutoPlayed: recent);
+
+        var service = new SimilarityService(db, StubAudioSimilarityService.Unavailable);
+        var queue = await service.GetAutoPlayQueueAsync(
+            station, [.. recent, .. playlist.Select(t => t.Id)], 8);
+
+        Assert.True(
+            queue.Count(t => t.ArtistId == chosen.Id) >= queue.Count(t => t.ArtistId == drifted.Id),
+            "the anchor's artist should lead a queue that drifted on auto-play picks alone");
+    }
+
+    [Fact]
+    public async Task GetAutoPlayQueue_Station_DislikedArtistIsSteeredAway()
+    {
+        using var db = TestDbContextFactory.Create();
+        var rock = AddGenre(db, "rock");
+        var seed = AddArtist(db, "Seed");
+        var unwanted = AddArtist(db, "Unwanted");
+        var neighbour = AddArtist(db, "Neighbour");
+
+        var seedTrack = AddTrack(db, seed, "Seed 0", genres: rock);
+        for (var i = 1; i < 4; i++) AddTrack(db, seed, $"Seed {i}", genres: rock);
+        var rejected = AddTrack(db, unwanted, "Unwanted 0", genres: rock);
+        for (var i = 1; i < 6; i++) AddTrack(db, unwanted, $"Unwanted {i}", genres: rock);
+        for (var i = 0; i < 6; i++) AddTrack(db, neighbour, $"Neighbour {i}", genres: rock);
+        await db.SaveChangesAsync();
+
+        var service = new SimilarityService(db, StubAudioSimilarityService.Unavailable);
+        var queue = await service.GetAutoPlayQueueAsync(
+            new AutoPlayStation([seedTrack.Id], Disliked: [rejected.Id]), [seedTrack.Id], 12);
+
+        Assert.DoesNotContain(queue, t => t.ArtistId == unwanted.Id);
+        Assert.Contains(queue, t => t.ArtistId == neighbour.Id);
+    }
+
+    [Fact]
+    public async Task GetAutoPlayQueue_Station_LikedTrackPullsItsArtistIn()
+    {
+        using var db = TestDbContextFactory.Create();
+        var seed = AddArtist(db, "Seed");
+        var elsewhere = AddArtist(db, "Elsewhere");
+
+        var seedTrack = AddTrack(db, seed, "Seed 0");
+        for (var i = 1; i < 4; i++) AddTrack(db, seed, $"Seed {i}");
+        var liked = AddTrack(db, elsewhere, "Elsewhere 0");
+        for (var i = 1; i < 4; i++) AddTrack(db, elsewhere, $"Elsewhere {i}");
+        await db.SaveChangesAsync();
+
+        var service = new SimilarityService(db, StubAudioSimilarityService.Unavailable);
+        var queue = await service.GetAutoPlayQueueAsync(
+            new AutoPlayStation([seedTrack.Id], Liked: [liked.Id]), [seedTrack.Id, liked.Id], 6);
+
+        Assert.Contains(queue, t => t.ArtistId == elsewhere.Id);
     }
 }
